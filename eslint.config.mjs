@@ -8,16 +8,16 @@ const __dirname = dirname(__filename);
 
 const eslintConfig = [...nextCoreWebVitals, ...nextTypescript, {
   rules: {
-    // TypeScript rules
-    "@typescript-eslint/no-explicit-any": "off",
-    "@typescript-eslint/no-unused-vars": "off",
+    // TypeScript rules - re-enabled for code quality
+    "@typescript-eslint/no-explicit-any": "warn",
+    "@typescript-eslint/no-unused-vars": ["warn", { argsIgnorePattern: "^_", varsIgnorePattern: "^_" }],
     "@typescript-eslint/no-non-null-assertion": "off",
     "@typescript-eslint/ban-ts-comment": "off",
-    "@typescript-eslint/prefer-as-const": "off",
+    "@typescript-eslint/prefer-as-const": "warn",
     "@typescript-eslint/no-unused-disable-directive": "off",
     
     // React rules
-    "react-hooks/exhaustive-deps": "off",
+    "react-hooks/exhaustive-deps": "warn",
     "react-hooks/purity": "off",
     "react/no-unescaped-entities": "off",
     "react/display-name": "off",
@@ -28,20 +28,20 @@ const eslintConfig = [...nextCoreWebVitals, ...nextTypescript, {
     "@next/next/no-img-element": "off",
     "@next/next/no-html-link-for-pages": "off",
     
-    // General JavaScript rules
-    "prefer-const": "off",
-    "no-unused-vars": "off",
-    "no-console": "off",
-    "no-debugger": "off",
-    "no-empty": "off",
-    "no-irregular-whitespace": "off",
+    // General JavaScript rules - re-enabled key rules
+    "prefer-const": "warn",
+    "no-unused-vars": "off", // Handled by @typescript-eslint/no-unused-vars
+    "no-console": "warn",
+    "no-debugger": "warn",
+    "no-empty": "warn",
+    "no-irregular-whitespace": "warn",
     "no-case-declarations": "off",
-    "no-fallthrough": "off",
-    "no-mixed-spaces-and-tabs": "off",
+    "no-fallthrough": "warn",
+    "no-mixed-spaces-and-tabs": "warn",
     "no-redeclare": "off",
     "no-undef": "off",
-    "no-unreachable": "off",
-    "no-useless-escape": "off",
+    "no-unreachable": "warn",
+    "no-useless-escape": "warn",
   },
 }, {
   ignores: ["node_modules/**", ".next/**", "out/**", "build/**", "next-env.d.ts", "examples/**", "skills"]
