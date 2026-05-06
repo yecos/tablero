@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import { useDesignStore, type ImageAnalysis, type SplitLayer } from '@/store/design-store'
 import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
@@ -19,6 +19,7 @@ import {
   ChevronDown,
   ChevronUp,
   Wand2,
+  RotateCcw,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
@@ -31,6 +32,7 @@ export function ImageSplitPanel() {
     completeImageAnalysis,
     completeImageSplit,
     addSplitLayersToCanvas,
+    addElement,
   } = useDesignStore()
 
   const { isAnalyzing, isSplitting, originalImageId, analysis, splitLayers, showSplitPanel } = imageSplit
@@ -38,36 +40,58 @@ export function ImageSplitPanel() {
   const [selectedElements, setSelectedElements] = useState<Set<string>>(new Set())
   const [expandedElement, setExpandedElement] = useState<string | null>(null)
   const [isGeneratingLayers, setIsGeneratingLayers] = useState(false)
+  const [analyzeError, setAnalyzeError] = useState<string | null>(null)
 
   // Get the original image element
   const originalImage = elements.find(e => e.id === originalImageId)
 
-  // Step 1: Analyze the image
+  // Auto-analyze when panel opens with an image
+  useEffect(() => {
+    if (showSplitPanel && originalImage?.src && !analysis && !isAnalyzing && !analyzeError) {
+      // Auto-trigger analysis when panel opens
+      handleAnalyze()
+    }
+  }, [showSplitPanel, originalImage?.src])
+
+  // Step 1: Analyze the image (triggered manually if needed)
   const handleAnalyze = useCallback(async () => {
     if (!originalImage?.src) {
       toast.error('No image found to analyze')
       return
     }
 
+    setAnalyzeError(null)
     useDesignStore.getState().startImageAnalysis(originalImage.id)
 
     try {
-      // Extract base64 data from the image src
-      let imageBase64 = null
+      let imageBase64: string | null = null
+      let imageUrl: string | null = null
+
       if (originalImage.src.startsWith('data:')) {
         imageBase64 = originalImage.src.split(',')[1]
+        // Resize if too large (>10MB base64)
+        if (imageBase64.length > 10 * 1024 * 1024) {
+          try {
+            const resized = await resizeBase64Image(originalImage.src, 1024)
+            imageBase64 = resized.split(',')[1]
+          } catch {
+            console.warn('Image resize failed, using original')
+          }
+        }
+      } else {
+        imageUrl = originalImage.src
       }
 
       const response = await fetch('/api/analyze-image', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          imageBase64,
-          imageUrl: imageBase64 ? undefined : originalImage.src,
-        }),
+        body: JSON.stringify({ imageBase64, imageUrl }),
       })
 
-      if (!response.ok) throw new Error('Analysis failed')
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: 'Unknown server error' }))
+        throw new Error(errorData.error || `Server error ${response.status}`)
+      }
 
       const data = await response.json()
 
@@ -75,21 +99,27 @@ export function ImageSplitPanel() {
         completeImageAnalysis(data.analysis)
         // Auto-select all elements
         const allIds = [
-          ...(data.analysis.elements || []).map((e: ImageAnalysis['elements'][0]) => e.id),
-          ...(data.analysis.textElements || []).map((t: ImageAnalysis['textElements'][0]) => t.id),
+          ...(data.analysis.elements || []).map((e: { id: string }) => e.id),
+          ...(data.analysis.textElements || []).map((t: { id: string }) => t.id),
         ]
         setSelectedElements(new Set(allIds))
-        toast.success('Image analyzed! Select elements to split into editable layers.')
+        if (data.fallback) {
+          toast('Using default layers', { description: 'AI vision analysis unavailable, using preset layer structure' })
+        } else {
+          toast.success('Image analyzed! Select elements to split.')
+        }
       } else {
+        setAnalyzeError('Analysis returned no results')
         toast.error('Analysis returned no results')
-        closeSplitPanel()
       }
     } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to analyze image'
       console.error('Analysis error:', error)
-      toast.error('Failed to analyze image. Please try again.')
-      closeSplitPanel()
+      setAnalyzeError(message)
+      toast.error(message)
+      // Don't close panel, let user retry
     }
-  }, [originalImage, completeImageAnalysis, closeSplitPanel])
+  }, [originalImage, completeImageAnalysis])
 
   // Step 2: Generate the split layers
   const handleSplit = useCallback(async () => {
@@ -100,9 +130,9 @@ export function ImageSplitPanel() {
 
     useDesignStore.getState().startImageSplit()
     setIsGeneratingLayers(true)
+    setAnalyzeError(null)
 
     try {
-      // Prepare layers to generate
       const layersToGenerate = analysis.elements
         .filter(e => selectedElements.has(e.id))
         .map(e => ({
@@ -122,12 +152,14 @@ export function ImageSplitPanel() {
         }),
       })
 
-      if (!response.ok) throw new Error('Split failed')
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: 'Unknown server error' }))
+        throw new Error(errorData.error || `Server error ${response.status}`)
+      }
 
       const data = await response.json()
 
       if (data.success && data.layers) {
-        // Add text elements as editable text layers
         const textLayers: SplitLayer[] = analysis.textElements
           .filter(t => selectedElements.has(t.id))
           .map(t => ({
@@ -142,12 +174,14 @@ export function ImageSplitPanel() {
         completeImageSplit(allLayers)
         toast.success('Image split into editable layers!')
       } else {
-        toast.error('Split returned no results')
+        setAnalyzeError('Split returned no results')
         completeImageSplit([])
       }
     } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to split image'
       console.error('Split error:', error)
-      toast.error('Failed to split image. Please try again.')
+      setAnalyzeError(message)
+      toast.error(message)
       completeImageSplit([])
     } finally {
       setIsGeneratingLayers(false)
@@ -169,7 +203,6 @@ export function ImageSplitPanel() {
 
     // Also add text elements as text elements on canvas
     if (analysis?.textElements) {
-      const { addElement } = useDesignStore.getState()
       analysis.textElements.forEach((textEl, idx) => {
         addElement({
           id: `split_txt_${textEl.id}_${Date.now()}_${idx}`,
@@ -196,7 +229,7 @@ export function ImageSplitPanel() {
     }
 
     toast.success('Editable layers added to canvas!')
-  }, [originalImage, splitLayers, analysis, addSplitLayersToCanvas])
+  }, [originalImage, splitLayers, analysis, addSplitLayersToCanvas, addElement])
 
   // Toggle element selection
   const toggleElement = (id: string) => {
@@ -248,7 +281,7 @@ export function ImageSplitPanel() {
 
       <ScrollArea className="flex-1">
         <div className="p-4 space-y-4">
-          {/* Step 1: Original Image Preview */}
+          {/* Original Image Preview */}
           {originalImage?.src && (
             <div className="space-y-2">
               <span className="text-[10px] font-medium text-slate-500 uppercase tracking-wider">Original Image</span>
@@ -265,7 +298,7 @@ export function ImageSplitPanel() {
                         <Loader2 className="w-8 h-8 animate-spin text-purple-400" />
                         <ScanEye className="w-4 h-4 text-cyan-400 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" />
                       </div>
-                      <span className="text-xs text-purple-300">Analyzing image...</span>
+                      <span className="text-xs text-purple-300">Scanning image with AI...</span>
                     </div>
                   </div>
                 )}
@@ -273,8 +306,27 @@ export function ImageSplitPanel() {
             </div>
           )}
 
-          {/* Auto-analyze on first open */}
-          {isAnalyzing && !analysis && (
+          {/* Error state */}
+          {analyzeError && (
+            <div className="p-3 rounded-lg bg-red-500/5 border border-red-500/20">
+              <div className="flex items-center gap-2 mb-2">
+                <AlertCircle className="w-4 h-4 text-red-400" />
+                <span className="text-xs text-red-300">Error</span>
+              </div>
+              <p className="text-[11px] text-red-300/70 leading-relaxed">{analyzeError}</p>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleAnalyze}
+                className="mt-2 h-7 text-[10px] text-red-300 hover:text-white hover:bg-red-500/10"
+              >
+                <RotateCcw className="w-3 h-3 mr-1" /> Retry Analysis
+              </Button>
+            </div>
+          )}
+
+          {/* Loading state - no analysis yet */}
+          {isAnalyzing && !analysis && !analyzeError && (
             <div className="text-center py-8">
               <div className="w-16 h-16 rounded-2xl bg-gradient-to-r from-purple-500/20 to-cyan-500/20 flex items-center justify-center mx-auto mb-4">
                 <ScanEye className="w-8 h-8 text-purple-400 animate-pulse" />
@@ -286,7 +338,7 @@ export function ImageSplitPanel() {
             </div>
           )}
 
-          {/* Step 2: Analysis Results */}
+          {/* Analysis Results */}
           {analysis && (
             <div className="space-y-3">
               {/* Description */}
@@ -335,7 +387,6 @@ export function ImageSplitPanel() {
                         className="flex items-center gap-2.5 p-2.5 cursor-pointer"
                         onClick={() => toggleElement(element.id)}
                       >
-                        {/* Checkbox */}
                         <div
                           className={cn(
                             'w-4 h-4 rounded border flex items-center justify-center shrink-0 transition-colors',
@@ -347,7 +398,6 @@ export function ImageSplitPanel() {
                           {isSelected && <CheckCircle2 className="w-3 h-3 text-white" />}
                         </div>
 
-                        {/* Icon */}
                         <div className={cn(
                           'w-7 h-7 rounded-md flex items-center justify-center shrink-0',
                           element.type === 'background' ? 'bg-blue-500/10' :
@@ -364,13 +414,11 @@ export function ImageSplitPanel() {
                           )} />
                         </div>
 
-                        {/* Info */}
                         <div className="flex-1 min-w-0">
                           <span className="text-xs text-white font-medium">{element.name}</span>
                           <p className="text-[10px] text-slate-500 truncate">{element.type} - {element.position}</p>
                         </div>
 
-                        {/* Expand */}
                         <button
                           onClick={(e) => {
                             e.stopPropagation()
@@ -382,7 +430,6 @@ export function ImageSplitPanel() {
                         </button>
                       </div>
 
-                      {/* Expanded details */}
                       {isExpanded && (
                         <div className="px-2.5 pb-2.5 space-y-2">
                           <p className="text-[11px] text-slate-400 leading-relaxed">{element.description}</p>
@@ -426,7 +473,7 @@ export function ImageSplitPanel() {
                         </div>
                         <Type className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
                         <div className="flex-1 min-w-0">
-                          <span className="text-xs text-white">"{textEl.text}"</span>
+                          <span className="text-xs text-white">&ldquo;{textEl.text}&rdquo;</span>
                           <p className="text-[10px] text-slate-500">{textEl.name} - {textEl.style}</p>
                         </div>
                       </div>
@@ -440,7 +487,7 @@ export function ImageSplitPanel() {
               {/* Generate button */}
               <Button
                 onClick={handleSplit}
-                disabled={selectedElements.size === 0 || isSplitting}
+                disabled={selectedElements.size === 0 || isSplitting || isGeneratingLayers}
                 className="w-full bg-gradient-to-r from-purple-600 to-cyan-500 hover:from-purple-500 hover:to-cyan-400 text-white border-0 h-10"
               >
                 {isSplitting || isGeneratingLayers ? (
@@ -451,14 +498,14 @@ export function ImageSplitPanel() {
                 ) : (
                   <>
                     <Wand2 className="w-4 h-4 mr-2" />
-                    Split into {selectedElements.size} Editable Layers
+                    Split into {selectedElements.size} Editable Layer{selectedElements.size !== 1 ? 's' : ''}
                   </>
                 )}
               </Button>
             </div>
           )}
 
-          {/* Step 3: Generated Layers Preview */}
+          {/* Generated Layers Preview */}
           {splitLayers.length > 0 && (
             <div className="space-y-3">
               <span className="text-[10px] font-medium text-emerald-400 uppercase tracking-wider">
@@ -466,7 +513,7 @@ export function ImageSplitPanel() {
               </span>
 
               <div className="grid grid-cols-2 gap-2">
-                {splitLayers.map((layer, idx) => (
+                {splitLayers.map((layer) => (
                   <div key={layer.id} className="rounded-lg border border-white/10 overflow-hidden bg-black/30">
                     {layer.imageUrl || layer.base64 ? (
                       <img
@@ -511,7 +558,6 @@ export function ImageSplitPanel() {
                       </div>
                     </div>
                     <div className="rounded-lg border border-emerald-500/20 overflow-hidden bg-black/30">
-                      {/* Show the background layer as the "editable" version */}
                       {splitLayers.find(l => l.type === 'background' && (l.imageUrl || l.base64)) ? (
                         <img
                           src={
@@ -561,9 +607,30 @@ export function ImageSplitPanel() {
       {/* Footer */}
       <div className="p-3 border-t border-white/5 bg-[#0a0a0f]/50">
         <p className="text-[10px] text-slate-600 text-center">
-          Powered by AI Vision Analysis - Similar to Lovart.ai Edit Elements
+          AI Vision Analysis - Decompose images into editable layers
         </p>
       </div>
     </div>
   )
+}
+
+// Utility: Resize a base64 image
+async function resizeBase64Image(dataUrl: string, maxDim: number): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const img = new Image()
+    img.onload = () => {
+      const ratio = Math.min(maxDim / img.width, maxDim / img.height, 1)
+      const w = Math.round(img.width * ratio)
+      const h = Math.round(img.height * ratio)
+      const canvas = document.createElement('canvas')
+      canvas.width = w
+      canvas.height = h
+      const ctx = canvas.getContext('2d')
+      if (!ctx) { reject(new Error('No canvas context')); return }
+      ctx.drawImage(img, 0, 0, w, h)
+      resolve(canvas.toDataURL('image/png'))
+    }
+    img.onerror = () => reject(new Error('Image load failed'))
+    img.src = dataUrl
+  })
 }

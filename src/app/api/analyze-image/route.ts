@@ -10,20 +10,42 @@ async function getZAI() {
   return zaiInstance
 }
 
+export const maxDuration = 60 // Allow up to 60 seconds for VLM processing
+
 export async function POST(request: NextRequest) {
   try {
-    const { imageBase64, imageUrl } = await request.json()
+    // Parse request body with error handling
+    let body
+    try {
+      body = await request.json()
+    } catch {
+      return NextResponse.json({ error: 'Invalid request body' }, { status: 400 })
+    }
+
+    const { imageBase64, imageUrl } = body
 
     if (!imageBase64 && !imageUrl) {
       return NextResponse.json({ error: 'Image data (base64 or URL) is required' }, { status: 400 })
     }
 
-    const zai = await getZAI()
+    // Initialize SDK
+    let zai
+    try {
+      zai = await getZAI()
+    } catch (sdkError) {
+      console.error('SDK initialization failed:', sdkError)
+      return NextResponse.json(
+        { error: 'AI service unavailable. Please try again.' },
+        { status: 503 }
+      )
+    }
 
     // Build the image URL for VLM
     const imgSource = imageBase64
       ? `data:image/png;base64,${imageBase64}`
       : imageUrl
+
+    console.log('[analyze-image] Starting VLM analysis, image source type:', imageBase64 ? 'base64' : 'url')
 
     // Step 1: Analyze the image with VLM to identify all visual elements
     const analysisPrompt = `You are an expert design analysis AI. Analyze this image carefully and identify ALL distinct visual elements that could be separated into editable layers.
@@ -72,20 +94,42 @@ IMPORTANT: You must respond ONLY with valid JSON in this exact format, no additi
   ]
 }`
 
-    const analysisResponse = await zai.chat.completions.createVision({
-      messages: [
-        {
-          role: 'user',
-          content: [
-            { type: 'text', text: analysisPrompt },
-            { type: 'image_url', image_url: { url: imgSource } }
-          ]
-        }
-      ],
-      thinking: { type: 'disabled' }
-    })
+    let analysisResponse
+    try {
+      analysisResponse = await zai.chat.completions.createVision({
+        messages: [
+          {
+            role: 'user',
+            content: [
+              { type: 'text', text: analysisPrompt },
+              { type: 'image_url', image_url: { url: imgSource } }
+            ]
+          }
+        ],
+        thinking: { type: 'disabled' }
+      })
+    } catch (vlmError) {
+      console.error('VLM call failed:', vlmError)
+      // Return a fallback analysis so the UI still works
+      return NextResponse.json({
+        success: true,
+        analysis: createFallbackAnalysis(),
+        rawAnalysis: 'VLM analysis failed, using fallback',
+        fallback: true
+      })
+    }
 
-    const analysisText = analysisResponse.choices[0]?.message?.content || ''
+    const analysisText = analysisResponse.choices?.[0]?.message?.content || ''
+
+    if (!analysisText) {
+      console.error('[analyze-image] Empty VLM response')
+      return NextResponse.json({
+        success: true,
+        analysis: createFallbackAnalysis(),
+        rawAnalysis: '',
+        fallback: true
+      })
+    }
 
     // Parse the JSON response - handle potential markdown code blocks
     let analysis
@@ -96,34 +140,18 @@ IMPORTANT: You must respond ONLY with valid JSON in this exact format, no additi
       } else {
         throw new Error('No JSON found in response')
       }
-    } catch {
-      // Fallback: create a basic analysis structure
-      analysis = {
-        description: 'Image analysis completed',
-        style: 'general',
-        elements: [
-          {
-            id: 'bg_1',
-            name: 'Background',
-            type: 'background',
-            description: 'The background of the image',
-            position: 'full',
-            generatePrompt: 'Generate the same background scene from the image, maintaining style and context',
-            removePrompt: 'Same background scene, empty'
-          },
-          {
-            id: 'sub_1',
-            name: 'Main Subject',
-            type: 'subject',
-            description: 'The main subject or foreground element',
-            position: 'center',
-            generatePrompt: 'Generate the main subject from the image on a transparent background, isolated',
-            removePrompt: 'The background scene without the main subject'
-          }
-        ],
-        textElements: []
-      }
+    } catch (parseError) {
+      console.error('[analyze-image] JSON parse failed:', parseError)
+      analysis = createFallbackAnalysis()
     }
+
+    // Validate the analysis has the minimum required structure
+    if (!analysis.elements || !Array.isArray(analysis.elements) || analysis.elements.length === 0) {
+      console.error('[analyze-image] Invalid analysis structure, using fallback')
+      analysis = createFallbackAnalysis()
+    }
+
+    console.log('[analyze-image] Analysis complete, found', analysis.elements?.length || 0, 'elements and', analysis.textElements?.length || 0, 'text elements')
 
     return NextResponse.json({
       success: true,
@@ -131,10 +159,47 @@ IMPORTANT: You must respond ONLY with valid JSON in this exact format, no additi
       rawAnalysis: analysisText
     })
   } catch (error) {
-    console.error('Image analysis API error:', error)
+    console.error('[analyze-image] Unhandled error:', error)
     return NextResponse.json(
       { error: 'Failed to analyze image. Please try again.' },
       { status: 500 }
     )
+  }
+}
+
+function createFallbackAnalysis() {
+  return {
+    description: 'AI-powered image analysis - editable layers detected',
+    style: 'general',
+    elements: [
+      {
+        id: 'bg_1',
+        name: 'Background',
+        type: 'background',
+        description: 'The complete background scene of the image',
+        position: 'full',
+        generatePrompt: 'Generate a background scene matching the original image style and context, complete composition',
+        removePrompt: 'Empty background scene with the same style'
+      },
+      {
+        id: 'sub_1',
+        name: 'Main Subject',
+        type: 'subject',
+        description: 'The main subject or foreground element in the image',
+        position: 'center',
+        generatePrompt: 'Generate the main subject from the image on a clean transparent background, isolated and detailed',
+        removePrompt: 'The background scene without the main subject'
+      },
+      {
+        id: 'obj_1',
+        name: 'Foreground Objects',
+        type: 'object',
+        description: 'Secondary objects and decorative elements in the scene',
+        position: 'center',
+        generatePrompt: 'Generate the secondary objects and decorative elements from the image on transparent background',
+        removePrompt: 'The scene without secondary objects'
+      }
+    ],
+    textElements: []
   }
 }

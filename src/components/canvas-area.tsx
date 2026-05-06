@@ -5,6 +5,27 @@ import { useDesignStore } from '@/store/design-store'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 
+// Utility: Resize a base64 image to fit within maxDim
+async function resizeBase64Image(dataUrl: string, maxDim: number): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const img = new Image()
+    img.onload = () => {
+      const ratio = Math.min(maxDim / img.width, maxDim / img.height, 1)
+      const w = Math.round(img.width * ratio)
+      const h = Math.round(img.height * ratio)
+      const canvas = document.createElement('canvas')
+      canvas.width = w
+      canvas.height = h
+      const ctx = canvas.getContext('2d')
+      if (!ctx) { reject(new Error('No canvas context')); return }
+      ctx.drawImage(img, 0, 0, w, h)
+      resolve(canvas.toDataURL('image/png'))
+    }
+    img.onerror = () => reject(new Error('Image load failed'))
+    img.src = dataUrl
+  })
+}
+
 export function CanvasArea() {
   const { elements, zoom, panX, panY, setPan, setZoom, selectedElementId, selectElement, updateElement, activeTool, addElement, setCenteredPan } = useDesignStore()
   const canvasRef = useRef<HTMLDivElement>(null)
@@ -281,7 +302,7 @@ export function CanvasArea() {
     })
   }, [panX, panY, zoom, addElement])
 
-  // Handle Edit Elements click
+  // Handle Edit Elements click - just opens the panel, analysis triggered by panel
   const handleEditElements = useCallback(() => {
     if (!selectedElementId) return
     const element = elements.find(e => e.id === selectedElementId)
@@ -290,46 +311,16 @@ export function CanvasArea() {
       return
     }
 
-    // Start the analysis process
-    const { startImageAnalysis } = useDesignStore.getState()
-    startImageAnalysis(element.id)
-
-    // Trigger the actual analysis
-    const analyzeImage = async () => {
-      try {
-        let imageBase64 = null
-        if (element.src.startsWith('data:')) {
-          imageBase64 = element.src.split(',')[1]
-        }
-
-        const response = await fetch('/api/analyze-image', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            imageBase64,
-            imageUrl: imageBase64 ? undefined : element.src,
-          }),
-        })
-
-        if (!response.ok) throw new Error('Analysis failed')
-
-        const data = await response.json()
-
-        if (data.success && data.analysis) {
-          useDesignStore.getState().completeImageAnalysis(data.analysis)
-          toast.success('Image analyzed! Review elements in the panel.')
-        } else {
-          toast.error('Analysis returned no results')
-          useDesignStore.getState().closeSplitPanel()
-        }
-      } catch (error) {
-        console.error('Analysis error:', error)
-        toast.error('Failed to analyze image. Please try again.')
-        useDesignStore.getState().closeSplitPanel()
-      }
-    }
-
-    analyzeImage()
+    // Just open the split panel - the panel will handle the analysis
+    const { setImageSplit } = useDesignStore.getState()
+    setImageSplit({
+      showSplitPanel: true,
+      originalImageId: element.id,
+      isAnalyzing: false,
+      isSplitting: false,
+      analysis: null,
+      splitLayers: [],
+    })
   }, [selectedElementId, elements])
 
   // Get selected element for context menu
