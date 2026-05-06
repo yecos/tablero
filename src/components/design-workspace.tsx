@@ -27,9 +27,15 @@ export function DesignWorkspace({ onClose }: DesignWorkspaceProps) {
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
-        // Close split panel first if open
-        if (imageSplit.showSplitPanel) {
-          useDesignStore.getState().closeSplitPanel()
+        const store = useDesignStore.getState()
+        // Cancel connection creation first if active
+        if (store.connectingFrom) {
+          store.setConnectingFrom(null)
+          return
+        }
+        // Close split panel if open
+        if (store.imageSplit.showSplitPanel) {
+          store.closeSplitPanel()
         } else {
           onClose()
         }
@@ -37,7 +43,7 @@ export function DesignWorkspace({ onClose }: DesignWorkspaceProps) {
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [onClose, imageSplit.showSplitPanel])
+  }, [onClose])
 
   return (
     <div className="fixed inset-0 z-[100] bg-[#0a0a0f] flex flex-col animate-in fade-in duration-200">

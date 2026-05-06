@@ -1,8 +1,25 @@
 import { create } from 'zustand'
 
+export interface ConnectionPoint {
+  id: string
+  x: number  // relative to element center
+  y: number  // relative to element center
+  label?: string
+}
+
+export interface NodeEdge {
+  id: string
+  sourceId: string
+  sourcePointId: string
+  targetId: string
+  targetPointId: string
+  color?: string
+  label?: string
+}
+
 export interface DesignElement {
   id: string
-  type: 'image' | 'text' | 'shape' | 'group'
+  type: 'image' | 'text' | 'shape' | 'group' | '3d'
   x: number
   y: number
   width: number
@@ -22,6 +39,11 @@ export interface DesignElement {
   parentImageId?: string
   layerType?: 'background' | 'subject' | 'text' | 'object' | 'decoration' | 'effect'
   layerName?: string
+  // 3D support
+  modelUrl?: string
+  modelData?: string
+  isGenerating3D?: boolean
+  connectionPoints?: ConnectionPoint[]
 }
 
 export interface Layer {
@@ -102,7 +124,7 @@ export interface DesignState {
   panX: number
   panY: number
   projectName: string
-  activeTool: 'select' | 'text' | 'shape' | 'image' | 'draw'
+  activeTool: 'select' | 'text' | 'shape' | 'image' | 'draw' | '3d'
   leftPanelTab: 'layers' | 'assets' | 'templates' | 'brandkit'
   leftPanelOpen: boolean
   chatSidebarOpen: boolean
@@ -116,6 +138,13 @@ export interface DesignState {
 
   // Image Split State
   imageSplit: ImageSplitState
+
+  // Node Edges / Connections
+  edges: NodeEdge[]
+  isGenerating3D: boolean
+
+  // Connection creation state
+  connectingFrom: { elementId: string; pointId: string } | null
 
   addElement: (element: DesignElement) => void
   removeElement: (id: string) => void
@@ -142,6 +171,13 @@ export interface DesignState {
   completeImageSplit: (layers: SplitLayer[]) => void
   closeSplitPanel: () => void
   addSplitLayersToCanvas: (layers: SplitLayer[], originalImageId: string, originalX: number, originalY: number, originalWidth: number, originalHeight: number) => void
+  // Edge / Connection actions
+  addEdge: (edge: NodeEdge) => void
+  removeEdge: (id: string) => void
+  updateEdge: (id: string, updates: Partial<NodeEdge>) => void
+  setConnectingFrom: (from: { elementId: string; pointId: string } | null) => void
+  setIsGenerating3D: (generating: boolean) => void
+  addConnectionPoint: (elementId: string, point: ConnectionPoint) => void
 }
 
 const MAX_HISTORY = 50
@@ -173,6 +209,11 @@ export const useDesignStore = create<DesignState>((set, get) => ({
     splitLayers: [],
     showSplitPanel: false,
   },
+
+  // 3D / Edge state
+  edges: [],
+  isGenerating3D: false,
+  connectingFrom: null,
 
   pushHistory: () => {
     const { elements, history, historyIndex } = get()
@@ -431,4 +472,33 @@ export const useDesignStore = create<DesignState>((set, get) => ({
         }
       }
     }),
+
+  // Edge / Connection actions
+  addEdge: (edge) =>
+    set((state) => ({
+      edges: [...state.edges, edge],
+    })),
+
+  removeEdge: (id) =>
+    set((state) => ({
+      edges: state.edges.filter((e) => e.id !== id),
+    })),
+
+  updateEdge: (id, updates) =>
+    set((state) => ({
+      edges: state.edges.map((e) => (e.id === id ? { ...e, ...updates } : e)),
+    })),
+
+  setConnectingFrom: (from) => set({ connectingFrom: from }),
+
+  setIsGenerating3D: (generating) => set({ isGenerating3D: generating }),
+
+  addConnectionPoint: (elementId, point) =>
+    set((state) => ({
+      elements: state.elements.map((e) =>
+        e.id === elementId
+          ? { ...e, connectionPoints: [...(e.connectionPoints || []), point] }
+          : e
+      ),
+    })),
 }))

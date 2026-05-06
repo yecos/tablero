@@ -12,6 +12,7 @@ import {
   Square,
   Image,
   Pencil,
+  Box,
   Download,
   Share2,
   PanelLeftClose,
@@ -36,6 +37,7 @@ export function Toolbar({ onClose }: ToolbarProps) {
     { id: 'text' as const, icon: Type, label: 'Text' },
     { id: 'shape' as const, icon: Square, label: 'Shape' },
     { id: 'image' as const, icon: Image, label: 'Image' },
+    { id: '3d' as const, icon: Box, label: '3D Convert' },
     { id: 'draw' as const, icon: Pencil, label: 'Draw' },
   ]
 
@@ -198,7 +200,9 @@ export function Toolbar({ onClose }: ToolbarProps) {
             className={cn(
               'h-7 w-7 rounded-md flex items-center justify-center transition-colors',
               activeTool === tool.id
-                ? 'bg-purple-500/20 text-purple-400'
+                ? tool.id === '3d'
+                  ? 'bg-cyan-500/20 text-cyan-400'
+                  : 'bg-purple-500/20 text-purple-400'
                 : 'text-slate-500 hover:text-white hover:bg-white/5'
             )}
             title={tool.label}
