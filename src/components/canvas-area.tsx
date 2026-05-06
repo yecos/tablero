@@ -5,24 +5,45 @@ import { useDesignStore } from '@/store/design-store'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 
-// Utility: Resize a base64 image to fit within maxDim
-async function resizeBase64Image(dataUrl: string, maxDim: number): Promise<string> {
+// Utility: Compress an image file to a data URL with max dimensions and JPEG compression
+// This is critical - we MUST compress at upload time to avoid 502 errors later
+function compressImageFile(file: File, maxDim: number = 1024): Promise<string> {
   return new Promise((resolve, reject) => {
-    const img = new Image()
-    img.onload = () => {
-      const ratio = Math.min(maxDim / img.width, maxDim / img.height, 1)
-      const w = Math.round(img.width * ratio)
-      const h = Math.round(img.height * ratio)
-      const canvas = document.createElement('canvas')
-      canvas.width = w
-      canvas.height = h
-      const ctx = canvas.getContext('2d')
-      if (!ctx) { reject(new Error('No canvas context')); return }
-      ctx.drawImage(img, 0, 0, w, h)
-      resolve(canvas.toDataURL('image/png'))
+    const reader = new FileReader()
+    reader.onerror = () => reject(new Error('Failed to read file'))
+    reader.onload = (event) => {
+      const dataUrl = event.target?.result as string
+      if (!dataUrl) { reject(new Error('No data URL')); return }
+
+      const img = new Image()
+      img.onerror = () => {
+        // If Image() fails to load (very large file), try with the raw data URL
+        console.warn('Image load failed, using original data URL')
+        resolve(dataUrl)
+      }
+      img.onload = () => {
+        try {
+          const ratio = Math.min(maxDim / img.width, maxDim / img.height, 1)
+          const w = Math.round(img.width * ratio)
+          const h = Math.round(img.height * ratio)
+          const canvas = document.createElement('canvas')
+          canvas.width = w
+          canvas.height = h
+          const ctx = canvas.getContext('2d')
+          if (!ctx) { resolve(dataUrl); return } // fallback to original
+          ctx.drawImage(img, 0, 0, w, h)
+          // Use JPEG with 0.85 quality for much smaller payloads
+          const compressed = canvas.toDataURL('image/jpeg', 0.85)
+          resolve(compressed)
+        } catch {
+          // Canvas operations can fail for very large images
+          console.warn('Canvas compression failed, using original')
+          resolve(dataUrl)
+        }
+      }
+      img.src = dataUrl
     }
-    img.onerror = () => reject(new Error('Image load failed'))
-    img.src = dataUrl
+    reader.readAsDataURL(file)
   })
 }
 
@@ -177,57 +198,86 @@ export function CanvasArea() {
     }
   }, [isDragging, isPanning, dragStart, dragOffset, panStart, selectedElementId, zoom, updateElement, setPan])
 
+  // Helper: add an image file to the canvas with compression
+  const addImageFileToCanvas = useCallback(async (file: File, dropX?: number, dropY?: number) => {
+    if (!file.type.startsWith('image/')) {
+      toast.error(`${file.name} is not an image file`)
+      return
+    }
+
+    try {
+      // Compress the image at upload time - this is critical for performance
+      // and to avoid 502 errors when analyzing images later
+      const compressedSrc = await compressImageFile(file, 1024)
+
+      // Get dimensions from the compressed image
+      const img = new Image()
+      img.onload = () => {
+        const maxDim = 500
+        const ratio = Math.min(maxDim / img.width, maxDim / img.height, 1)
+        const width = img.width * ratio
+        const height = img.height * ratio
+
+        const x = dropX !== undefined ? dropX - width / 2 : 5000 - width / 2 + Math.random() * 100 - 50
+        const y = dropY !== undefined ? dropY - height / 2 : 5000 - height / 2 + Math.random() * 100 - 50
+
+        addElement({
+          id: `upload_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+          type: 'image',
+          x,
+          y,
+          width,
+          height,
+          rotation: 0,
+          content: file.name,
+          src: compressedSrc, // Already compressed!
+          selected: false,
+          locked: false,
+          visible: true,
+          opacity: 1,
+        })
+        toast.success(`${file.name} added to canvas`)
+      }
+      img.onerror = () => {
+        // Fallback: add with default dimensions
+        addElement({
+          id: `upload_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+          type: 'image',
+          x: dropX !== undefined ? dropX - 200 : 4800,
+          y: dropY !== undefined ? dropY - 150 : 4850,
+          width: 400,
+          height: 300,
+          rotation: 0,
+          content: file.name,
+          src: compressedSrc,
+          selected: false,
+          locked: false,
+          visible: true,
+          opacity: 1,
+        })
+        toast.success(`${file.name} added to canvas`)
+      }
+      img.src = compressedSrc
+    } catch (err) {
+      console.error('Failed to process image:', err)
+      toast.error(`Failed to process ${file.name}`)
+    }
+  }, [addElement])
+
   // Image upload handler
   const handleImageUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files
     if (!files || files.length === 0) return
 
     Array.from(files).forEach((file) => {
-      if (!file.type.startsWith('image/')) {
-        toast.error(`${file.name} is not an image file`)
-        return
-      }
-
-      const reader = new FileReader()
-      reader.onload = (event) => {
-        const src = event.target?.result as string
-        if (!src) return
-
-        // Create a temporary image to get dimensions
-        const img = new Image()
-        img.onload = () => {
-          const maxDim = 500
-          const ratio = Math.min(maxDim / img.width, maxDim / img.height, 1)
-          const width = img.width * ratio
-          const height = img.height * ratio
-
-          addElement({
-            id: `upload_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
-            type: 'image',
-            x: 5000 - width / 2 + Math.random() * 100 - 50,
-            y: 5000 - height / 2 + Math.random() * 100 - 50,
-            width,
-            height,
-            rotation: 0,
-            content: file.name,
-            src,
-            selected: false,
-            locked: false,
-            visible: true,
-            opacity: 1,
-          })
-          toast.success(`${file.name} added to canvas`)
-        }
-        img.src = src
-      }
-      reader.readAsDataURL(file)
+      addImageFileToCanvas(file)
     })
 
     // Reset input
     if (fileInputRef.current) {
       fileInputRef.current.value = ''
     }
-  }, [addElement])
+  }, [addImageFileToCanvas])
 
   // Handle toolbar Image tool click
   useEffect(() => {
@@ -260,47 +310,13 @@ export function CanvasArea() {
     if (!files || files.length === 0) return
 
     Array.from(files).forEach((file) => {
-      if (!file.type.startsWith('image/')) return
-
-      const reader = new FileReader()
-      reader.onload = (event) => {
-        const src = event.target?.result as string
-        if (!src) return
-
-        const img = new Image()
-        img.onload = () => {
-          const maxDim = 500
-          const ratio = Math.min(maxDim / img.width, maxDim / img.height, 1)
-          const width = img.width * ratio
-          const height = img.height * ratio
-
-          // Calculate position from drop coordinates
-          const rect = canvasRef.current?.getBoundingClientRect()
-          const x = rect ? (e.clientX - rect.left - panX) / zoom - width / 2 : 5000 - width / 2
-          const y = rect ? (e.clientY - rect.top - panY) / zoom - height / 2 : 5000 - height / 2
-
-          addElement({
-            id: `drop_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
-            type: 'image',
-            x,
-            y,
-            width,
-            height,
-            rotation: 0,
-            content: file.name,
-            src,
-            selected: false,
-            locked: false,
-            visible: true,
-            opacity: 1,
-          })
-          toast.success(`${file.name} added to canvas`)
-        }
-        img.src = src
-      }
-      reader.readAsDataURL(file)
+      // Calculate position from drop coordinates
+      const rect = canvasRef.current?.getBoundingClientRect()
+      const dropX = rect ? (e.clientX - rect.left - panX) / zoom : undefined
+      const dropY = rect ? (e.clientY - rect.top - panY) / zoom : undefined
+      addImageFileToCanvas(file, dropX, dropY)
     })
-  }, [panX, panY, zoom, addElement])
+  }, [panX, panY, zoom, addImageFileToCanvas])
 
   // Handle Edit Elements click - just opens the panel, analysis triggered by panel
   const handleEditElements = useCallback(() => {

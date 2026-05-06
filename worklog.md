@@ -168,3 +168,24 @@ Stage Summary:
 - API routes simplified: Removed sharp dependency (was causing server crashes), rely on client-side compression
 - All API endpoints tested and working on production server
 - Server stays alive after multiple API requests
+
+---
+Task ID: 2
+Agent: Main Agent
+Task: Fix persistent 502 error on /api/analyze-image - "Image resize failed, using original"
+
+Work Log:
+- Identified root cause: The `resizeBase64Image` function in image-split-panel.tsx was failing when trying to load very large data URLs into `new Image()`, causing it to fall back to sending the original huge image to the API, which caused 502 errors
+- The real problem was that images were stored as full original data URLs in the Zustand store (could be 10+ MB for camera photos), and both the resize and the API call would fail on these huge payloads
+- Fix 1: canvas-area.tsx - Added `compressImageFile()` function that compresses images at upload time to max 1024px JPEG with 0.85 quality. This ensures the stored `src` is always small (~50-100KB instead of 10+ MB)
+- Fix 2: image-split-panel.tsx - Made `resizeBase64Image()` more robust with 10-second timeout and try-catch around canvas operations. Also changed the fallback behavior: instead of sending the original huge image, it now checks the size and shows a clear error if the image is too large (>2MB)
+- Fix 3: analyze-image/route.ts - Added server-side payload size validation: rejects requests with base64 > 3MB decoded (returns 413 with clear error message)
+- Tested: Small image (84KB) → 3 elements detected in 12.7s ✅
+- Tested: Landscape image (231KB) → 5 elements detected in 14.5s ✅
+- Server stays alive after multiple requests ✅
+
+Stage Summary:
+- Root cause chain: Large camera photo → stored as full data URL → resize fails at analysis time → original huge image sent to API → 502 error
+- Fix: Compress images at UPLOAD time (canvas-area.tsx), not at analysis time
+- All API endpoints verified working on production server
+- Added payload size validation on both client and server side

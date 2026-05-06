@@ -68,14 +68,26 @@ export function ImageSplitPanel() {
       let imageUrl: string | null = null
 
       if (originalImage.src.startsWith('data:')) {
-        // ALWAYS resize the image to max 512px to avoid 502 errors
-        // Even small-looking images can produce huge base64 strings
+        // Resize the image to max 512px JPEG for VLM analysis
+        // The image should already be compressed from upload (max 1024px JPEG)
+        // but we resize further to keep API payloads small
         try {
           const resized = await resizeBase64Image(originalImage.src, 512)
           imageBase64 = resized.split(',')[1]
-        } catch {
-          console.warn('Image resize failed, using original')
-          imageBase64 = originalImage.src.split(',')[1]
+        } catch (resizeErr) {
+          console.warn('Image resize failed:', resizeErr)
+          // If resize fails, try using the source directly but check size first
+          const rawBase64 = originalImage.src.split(',')[1]
+          if (rawBase64 && rawBase64.length > 0) {
+            const sizeMB = (rawBase64.length * 0.75) / (1024 * 1024)
+            if (sizeMB > 2) {
+              // Image is too large to send - abort with clear message
+              throw new Error('Image is too large for analysis. Please upload a smaller image (under 2MB).')
+            }
+            imageBase64 = rawBase64
+          } else {
+            throw new Error('Could not read image data for analysis.')
+          }
         }
       } else {
         imageUrl = originalImage.src
@@ -614,23 +626,47 @@ export function ImageSplitPanel() {
 }
 
 // Utility: Resize a base64 image (uses JPEG for much smaller payloads)
+// Includes timeout to prevent hanging on very large images
 async function resizeBase64Image(dataUrl: string, maxDim: number): Promise<string> {
   return new Promise((resolve, reject) => {
+    const timeoutMs = 10000 // 10 second timeout
+    let resolved = false
+
+    const timer = setTimeout(() => {
+      if (!resolved) {
+        resolved = true
+        reject(new Error('Image resize timed out'))
+      }
+    }, timeoutMs)
+
     const img = new Image()
     img.onload = () => {
-      const ratio = Math.min(maxDim / img.width, maxDim / img.height, 1)
-      const w = Math.round(img.width * ratio)
-      const h = Math.round(img.height * ratio)
-      const canvas = document.createElement('canvas')
-      canvas.width = w
-      canvas.height = h
-      const ctx = canvas.getContext('2d')
-      if (!ctx) { reject(new Error('No canvas context')); return }
-      ctx.drawImage(img, 0, 0, w, h)
-      // Use JPEG with 0.8 quality for ~10x smaller payload than PNG
-      resolve(canvas.toDataURL('image/jpeg', 0.8))
+      if (resolved) return
+      resolved = true
+      clearTimeout(timer)
+
+      try {
+        const ratio = Math.min(maxDim / img.width, maxDim / img.height, 1)
+        const w = Math.round(img.width * ratio)
+        const h = Math.round(img.height * ratio)
+        const canvas = document.createElement('canvas')
+        canvas.width = w
+        canvas.height = h
+        const ctx = canvas.getContext('2d')
+        if (!ctx) { reject(new Error('No canvas context')); return }
+        ctx.drawImage(img, 0, 0, w, h)
+        // Use JPEG with 0.8 quality for ~10x smaller payload than PNG
+        resolve(canvas.toDataURL('image/jpeg', 0.8))
+      } catch (canvasErr) {
+        reject(new Error('Canvas operation failed: ' + (canvasErr instanceof Error ? canvasErr.message : String(canvasErr))))
+      }
     }
-    img.onerror = () => reject(new Error('Image load failed'))
+    img.onerror = () => {
+      if (resolved) return
+      resolved = true
+      clearTimeout(timer)
+      reject(new Error('Image load failed'))
+    }
     img.src = dataUrl
   })
 }

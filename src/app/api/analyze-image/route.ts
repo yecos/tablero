@@ -37,6 +37,15 @@ export async function POST(request: NextRequest) {
     if (imageBase64) {
       const sizeMB = (imageBase64.length * 0.75) / (1024 * 1024)
       console.log(`[analyze-image] Base64 payload size: ${sizeMB.toFixed(2)} MB`)
+
+      // Reject payloads that are too large (> 3MB decoded) - they will cause VLM timeouts
+      if (sizeMB > 3) {
+        console.error('[analyze-image] Payload too large:', sizeMB.toFixed(2), 'MB')
+        return NextResponse.json(
+          { error: 'Image is too large for analysis. Please upload a smaller image (recommended: under 1MB).' },
+          { status: 413 }
+        )
+      }
     }
 
     // Initialize SDK
