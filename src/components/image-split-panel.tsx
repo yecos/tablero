@@ -64,53 +64,65 @@ export function ImageSplitPanel() {
     useDesignStore.getState().startImageAnalysis(originalImage.id)
 
     try {
-      let imageBase64: string | null = null
-      let imageUrl: string | null = null
+      // Build the request body - use FormData (multipart) for data URLs to avoid
+      // sending large base64 strings through JSON which can crash the server
+      let fetchOptions: RequestInit
 
       if (originalImage.src.startsWith('data:')) {
-        // Resize the image to max 512px JPEG for VLM analysis
-        // The image should already be compressed from upload (max 1024px JPEG)
-        // but we resize further to keep API payloads small
+        // Convert the data URL to a Blob/File for multipart upload
+        // This is MUCH more memory-efficient than sending base64 in JSON
         try {
           const resized = await resizeBase64Image(originalImage.src, 512)
-          imageBase64 = resized.split(',')[1]
+          const blob = await fetch(resized).then(r => r.blob())
+          const file = new File([blob], 'image.jpg', { type: 'image/jpeg' })
+          const formData = new FormData()
+          formData.append('image', file)
+          fetchOptions = {
+            method: 'POST',
+            body: formData,
+          }
         } catch (resizeErr) {
           console.warn('Image resize failed:', resizeErr)
-          // If resize fails, try using the source directly but check size first
-          const rawBase64 = originalImage.src.split(',')[1]
-          if (rawBase64 && rawBase64.length > 0) {
-            const sizeMB = (rawBase64.length * 0.75) / (1024 * 1024)
+          // Fallback: try to convert data URL directly to file
+          try {
+            const resp = await fetch(originalImage.src)
+            const blob = await resp.blob()
+            const sizeMB = blob.size / (1024 * 1024)
             if (sizeMB > 2) {
-              // Image is too large to send - abort with clear message
               throw new Error('Image is too large for analysis. Please upload a smaller image (under 2MB).')
             }
-            imageBase64 = rawBase64
-          } else {
+            const file = new File([blob], 'image.jpg', { type: blob.type || 'image/jpeg' })
+            const formData = new FormData()
+            formData.append('image', file)
+            fetchOptions = {
+              method: 'POST',
+              body: formData,
+            }
+          } catch {
             throw new Error('Could not read image data for analysis.')
           }
         }
       } else {
-        imageUrl = originalImage.src
+        // URL-based: send as JSON (small payload)
+        fetchOptions = {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ imageUrl: originalImage.src }),
+        }
       }
 
-      // Try the API call with retry logic (server may crash and restart due to memory pressure)
+      // Try the API call with retry logic
       let response: Response | null = null
-      let lastError: string | null = null
       const maxRetries = 2
 
       for (let attempt = 0; attempt <= maxRetries; attempt++) {
         try {
-          response = await fetch('/api/analyze-image', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ imageBase64, imageUrl }),
-          })
+          response = await fetch('/api/analyze-image', fetchOptions)
           break // Success - exit retry loop
         } catch (fetchErr) {
-          lastError = fetchErr instanceof Error ? fetchErr.message : 'Network error'
+          const lastError = fetchErr instanceof Error ? fetchErr.message : 'Network error'
           console.warn(`[analyze] Attempt ${attempt + 1} failed:`, lastError)
           if (attempt < maxRetries) {
-            // Server might be restarting - wait before retrying
             toast('Server reconnecting...', { description: `Retrying in ${3 + attempt * 2}s...` })
             await new Promise(r => setTimeout(r, (3 + attempt * 2) * 1000))
           }
@@ -118,7 +130,7 @@ export function ImageSplitPanel() {
       }
 
       if (!response) {
-        throw new Error(`Could not reach the analysis server after ${maxRetries + 1} attempts. The server may be overloaded - please try again in a moment.`)
+        throw new Error(`Could not reach the analysis server after ${maxRetries + 1} attempts. Please try again.`)
       }
 
       if (!response.ok) {

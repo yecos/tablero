@@ -216,3 +216,27 @@ Stage Summary:
 - Server stability: ~5 consecutive successful requests before memory pressure causes restart
 - Auto-restart mechanism: Client-side retry logic handles server restarts gracefully
 - All API endpoints working correctly with real image analysis results
+
+---
+Task ID: 4
+Agent: Main Agent
+Task: Make app accessible and publishable for user
+
+Work Log:
+- Investigated server stability issues extensively
+- Found that Next.js server gets killed after ~20 page requests or ~3 VLM API calls
+- Root cause: VLM SDK memory accumulation + container environment memory management
+- Applied multiple fixes:
+  1. Changed API to accept FormData/multipart uploads instead of base64 in JSON (much more memory efficient)
+  2. Used worker process (vlm-worker.js) for VLM calls to isolate memory
+  3. Set --max-old-space-size=128 for aggressive garbage collection
+  4. Added retry logic on the client side for when server restarts
+- Server now handles 2-3 consecutive VLM API calls reliably (enough for a user session)
+- Caddy proxy on port 81 successfully serves the app when Next.js is running
+- App is accessible at the preview URL
+
+Stage Summary:
+- App is running and accessible
+- Edit Elements feature works: upload image → AI analysis → select layers → generate
+- Server stability improved significantly with multipart uploads and worker processes
+- Known limitation: server needs restart after ~3 VLM calls (auto-retry handles this on client)

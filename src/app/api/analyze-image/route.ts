@@ -25,53 +25,72 @@ export async function POST(request: NextRequest) {
   let tempFilePath: string | null = null
 
   try {
-    // Parse request body
-    let body
-    try {
-      body = await request.json()
-    } catch {
-      return NextResponse.json({ error: 'Invalid request body' }, { status: 400 })
+    let imageBase64: string | null = null
+    let imageUrl: string | null = null
+
+    // Check content type to determine how to parse the request
+    const contentType = request.headers.get('content-type') || ''
+
+    if (contentType.includes('multipart/form-data')) {
+      // Handle multipart form upload (much more memory efficient than base64 in JSON)
+      console.log('[analyze-image] Processing multipart form upload')
+      const formData = await request.formData()
+      const imageFile = formData.get('image') as File | null
+      imageUrl = formData.get('imageUrl') as string | null
+
+      if (imageFile) {
+        // Save the uploaded file directly to disk (no base64 encoding/decoding!)
+        await ensureTempDir()
+        const tempId = `analyze_${Date.now()}_${Math.random().toString(36).slice(2, 8)}.jpg`
+        tempFilePath = path.join(TEMP_DIR, tempId)
+
+        const arrayBuffer = await imageFile.arrayBuffer()
+        const buffer = Buffer.from(arrayBuffer)
+        await writeFile(tempFilePath, buffer)
+        console.log('[analyze-image] Saved uploaded image:', tempFilePath, `(${(buffer.length / 1024).toFixed(1)} KB)`)
+      }
+    } else {
+      // Handle JSON body (for backward compatibility and URL-based analysis)
+      let body
+      try {
+        body = await request.json()
+      } catch {
+        return NextResponse.json({ error: 'Invalid request body' }, { status: 400 })
+      }
+      imageBase64 = body.imageBase64
+      imageUrl = body.imageUrl
+
+      if (imageBase64) {
+        const sizeMB = (imageBase64.length * 0.75) / (1024 * 1024)
+        console.log(`[analyze-image] Base64 payload size: ${sizeMB.toFixed(2)} MB`)
+
+        if (sizeMB > 1) {
+          return NextResponse.json(
+            { error: `Image is too large (${sizeMB.toFixed(1)}MB). Please upload a smaller image.` },
+            { status: 413 }
+          )
+        }
+
+        // Save base64 to temp file
+        await ensureTempDir()
+        const tempId = `analyze_${Date.now()}_${Math.random().toString(36).slice(2, 8)}.jpg`
+        tempFilePath = path.join(TEMP_DIR, tempId)
+        const buffer = Buffer.from(imageBase64, 'base64')
+        await writeFile(tempFilePath, buffer)
+        console.log('[analyze-image] Saved base64 image:', tempFilePath, `(${(buffer.length / 1024).toFixed(1)} KB)`)
+      }
     }
 
-    const { imageBase64, imageUrl } = body
-
-    if (!imageBase64 && !imageUrl) {
-      return NextResponse.json({ error: 'Image data (base64 or URL) is required' }, { status: 400 })
+    if (!tempFilePath && !imageUrl) {
+      return NextResponse.json({ error: 'Image data is required' }, { status: 400 })
     }
 
     // Determine the input for the worker script
-    let workerInput: string
+    const workerInput = tempFilePath || imageUrl!
 
-    if (imageBase64) {
-      const sizeMB = (imageBase64.length * 0.75) / (1024 * 1024)
-      console.log(`[analyze-image] Base64 payload size: ${sizeMB.toFixed(2)} MB`)
+    console.log('[analyze-image] Spawning VLM worker process, input:', tempFilePath ? 'file' : 'url')
 
-      if (sizeMB > 1) {
-        return NextResponse.json(
-          { error: `Image is too large (${sizeMB.toFixed(1)}MB). Please upload a smaller image.` },
-          { status: 413 }
-        )
-      }
-
-      // Save base64 to a temp file for the worker to read
-      await ensureTempDir()
-      const tempId = `analyze_${Date.now()}_${Math.random().toString(36).slice(2, 8)}.jpg`
-      tempFilePath = path.join(TEMP_DIR, tempId)
-
-      const buffer = Buffer.from(imageBase64, 'base64')
-      await writeFile(tempFilePath, buffer)
-      console.log('[analyze-image] Saved temp image:', tempFilePath, `(${(buffer.length / 1024).toFixed(1)} KB)`)
-
-      workerInput = tempFilePath
-    } else {
-      workerInput = imageUrl!
-    }
-
-    console.log('[analyze-image] Spawning VLM worker process...')
-
-    // Run the VLM worker as a SEPARATE process to isolate memory usage.
-    // The worker reads the image file, calls the VLM API, outputs JSON, and exits.
-    // This prevents the Next.js server from accumulating memory from VLM SDK calls.
+    // Run the VLM worker as a SEPARATE process to isolate memory usage
     const { stdout, stderr } = await execFileAsync(
       'node',
       [WORKER_SCRIPT, workerInput, 'analyze'],
