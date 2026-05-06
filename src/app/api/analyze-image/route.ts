@@ -1,166 +1,50 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { writeFile, unlink, mkdir } from 'fs/promises'
-import { existsSync } from 'fs'
-import { execFile } from 'child_process'
-import { promisify } from 'util'
-import path from 'path'
-
-const execFileAsync = promisify(execFile)
+import ZAI from 'z-ai-web-dev-sdk'
 
 export const maxDuration = 60
 export const dynamic = 'force-dynamic'
 
-const TEMP_DIR = path.join(process.cwd(), 'upload', 'temp')
-const WORKER_SCRIPT = path.join(process.cwd(), 'mini-services', 'vlm-worker.js')
-
-async function ensureTempDir() {
-  if (!existsSync(TEMP_DIR)) {
-    await mkdir(TEMP_DIR, { recursive: true })
-  }
+// Create a fresh ZAI instance per request to ensure clean state
+async function getZAI() {
+  return await ZAI.create()
 }
 
-export async function POST(request: NextRequest) {
-  console.log('[analyze-image] Request received')
+const ANALYZE_PROMPT = `You are an expert design analysis AI. Analyze this image carefully and identify ALL distinct visual elements that could be separated into editable layers.
 
-  let tempFilePath: string | null = null
+For each element, provide:
+- A descriptive name (e.g., "Background", "Main Subject", "Title Text", "Logo", "Decorative Element")
+- The type: one of "background", "subject", "text", "object", "decoration", "effect"
+- A brief description of what it looks like and its visual characteristics
+- Approximate position: one of "full", "top", "bottom", "left", "right", "center", "top-left", "top-right", "bottom-left", "bottom-right"
+- A detailed prompt that could be used to regenerate JUST this element on a transparent background (for subjects/objects) or as a complete scene (for backgrounds)
+- A prompt to regenerate the background WITHOUT this element (for inpainting/generative completion)
 
-  try {
-    let imageBase64: string | null = null
-    let imageUrl: string | null = null
-
-    // Check content type to determine how to parse the request
-    const contentType = request.headers.get('content-type') || ''
-
-    if (contentType.includes('multipart/form-data')) {
-      // Handle multipart form upload (much more memory efficient than base64 in JSON)
-      console.log('[analyze-image] Processing multipart form upload')
-      const formData = await request.formData()
-      const imageFile = formData.get('image') as File | null
-      imageUrl = formData.get('imageUrl') as string | null
-
-      if (imageFile) {
-        // Save the uploaded file directly to disk (no base64 encoding/decoding!)
-        await ensureTempDir()
-        const tempId = `analyze_${Date.now()}_${Math.random().toString(36).slice(2, 8)}.jpg`
-        tempFilePath = path.join(TEMP_DIR, tempId)
-
-        const arrayBuffer = await imageFile.arrayBuffer()
-        const buffer = Buffer.from(arrayBuffer)
-        await writeFile(tempFilePath, buffer)
-        console.log('[analyze-image] Saved uploaded image:', tempFilePath, `(${(buffer.length / 1024).toFixed(1)} KB)`)
-      }
-    } else {
-      // Handle JSON body (for backward compatibility and URL-based analysis)
-      let body
-      try {
-        body = await request.json()
-      } catch {
-        return NextResponse.json({ error: 'Invalid request body' }, { status: 400 })
-      }
-      imageBase64 = body.imageBase64
-      imageUrl = body.imageUrl
-
-      if (imageBase64) {
-        const sizeMB = (imageBase64.length * 0.75) / (1024 * 1024)
-        console.log(`[analyze-image] Base64 payload size: ${sizeMB.toFixed(2)} MB`)
-
-        if (sizeMB > 1) {
-          return NextResponse.json(
-            { error: `Image is too large (${sizeMB.toFixed(1)}MB). Please upload a smaller image.` },
-            { status: 413 }
-          )
-        }
-
-        // Save base64 to temp file
-        await ensureTempDir()
-        const tempId = `analyze_${Date.now()}_${Math.random().toString(36).slice(2, 8)}.jpg`
-        tempFilePath = path.join(TEMP_DIR, tempId)
-        const buffer = Buffer.from(imageBase64, 'base64')
-        await writeFile(tempFilePath, buffer)
-        console.log('[analyze-image] Saved base64 image:', tempFilePath, `(${(buffer.length / 1024).toFixed(1)} KB)`)
-      }
+IMPORTANT: You must respond ONLY with valid JSON in this exact format, no additional text:
+{
+  "description": "Overall description of the image",
+  "style": "Visual style description (e.g., modern minimalist, vintage, photorealistic)",
+  "elements": [
+    {
+      "id": "bg_1",
+      "name": "Background",
+      "type": "background",
+      "description": "Description of the background",
+      "position": "full",
+      "generatePrompt": "Prompt to generate just this element",
+      "removePrompt": "Prompt to generate the background without foreground elements"
     }
-
-    if (!tempFilePath && !imageUrl) {
-      return NextResponse.json({ error: 'Image data is required' }, { status: 400 })
+  ],
+  "textElements": [
+    {
+      "id": "txt_1",
+      "text": "The actual text content",
+      "name": "Headline",
+      "style": "Description of typography style",
+      "position": "top-center",
+      "fontSize": "large/medium/small"
     }
-
-    // Determine the input for the worker script
-    const workerInput = tempFilePath || imageUrl!
-
-    console.log('[analyze-image] Spawning VLM worker process, input:', tempFilePath ? 'file' : 'url')
-
-    // Run the VLM worker as a SEPARATE process to isolate memory usage
-    const { stdout, stderr } = await execFileAsync(
-      'node',
-      [WORKER_SCRIPT, workerInput, 'analyze'],
-      {
-        timeout: 55000,
-        maxBuffer: 5 * 1024 * 1024,
-        env: { ...process.env }
-      }
-    )
-
-    // Clean up temp file
-    if (tempFilePath) {
-      try { await unlink(tempFilePath) } catch { /* ignore */ }
-      tempFilePath = null
-    }
-
-    // Parse the worker output
-    let result
-    try {
-      result = JSON.parse(stdout.trim())
-    } catch {
-      console.error('[analyze-image] Worker output parse failed')
-      console.error('[analyze-image] stdout:', stdout.substring(0, 300))
-      if (stderr) console.error('[analyze-image] stderr:', stderr.substring(0, 300))
-
-      return NextResponse.json({
-        success: true,
-        analysis: createFallbackAnalysis(),
-        rawAnalysis: 'Worker process returned invalid output',
-        fallback: true
-      })
-    }
-
-    if (result.error && !result.analysis) {
-      console.error('[analyze-image] Worker error:', result.error)
-      return NextResponse.json({
-        success: true,
-        analysis: createFallbackAnalysis(),
-        rawAnalysis: result.error,
-        fallback: true
-      })
-    }
-
-    // Validate the analysis
-    if (!result.analysis?.elements || !Array.isArray(result.analysis.elements) || result.analysis.elements.length === 0) {
-      result.analysis = createFallbackAnalysis()
-      result.fallback = true
-    }
-
-    console.log('[analyze-image] Analysis complete, found', result.analysis?.elements?.length || 0, 'elements and', result.analysis?.textElements?.length || 0, 'text elements')
-
-    return NextResponse.json({
-      success: true,
-      analysis: result.analysis,
-      rawAnalysis: result.rawAnalysis || '',
-      fallback: result.fallback || false
-    })
-  } catch (error) {
-    console.error('[analyze-image] Unhandled error:', error)
-
-    if (tempFilePath) {
-      try { await unlink(tempFilePath) } catch { /* ignore */ }
-    }
-
-    return NextResponse.json(
-      { error: 'Failed to analyze image. Please try again.' },
-      { status: 500 }
-    )
-  }
-}
+  ]
+}`
 
 function createFallbackAnalysis() {
   return {
@@ -190,5 +74,155 @@ function createFallbackAnalysis() {
       }
     ],
     textElements: []
+  }
+}
+
+export async function POST(request: NextRequest) {
+  console.log('[analyze-image] Request received')
+
+  try {
+    let imgSource: string | null = null
+    const contentType = request.headers.get('content-type') || ''
+
+    if (contentType.includes('multipart/form-data')) {
+      // Handle multipart form upload
+      console.log('[analyze-image] Processing multipart form upload')
+      const formData = await request.formData()
+      const imageFile = formData.get('image') as File | null
+      const imageUrl = formData.get('imageUrl') as string | null
+
+      if (imageFile) {
+        const sizeMB = imageFile.size / (1024 * 1024)
+        console.log(`[analyze-image] Uploaded file size: ${sizeMB.toFixed(2)} MB`)
+
+        if (sizeMB > 2) {
+          return NextResponse.json(
+            { error: `Image is too large (${sizeMB.toFixed(1)}MB). Please upload a smaller image (under 2MB).` },
+            { status: 413 }
+          )
+        }
+
+        // Convert uploaded file to base64 data URL for VLM
+        const arrayBuffer = await imageFile.arrayBuffer()
+        const buffer = Buffer.from(arrayBuffer)
+        const mimeType = imageFile.type || 'image/jpeg'
+        imgSource = `data:${mimeType};base64,${buffer.toString('base64')}`
+      } else if (imageUrl) {
+        imgSource = imageUrl
+      }
+    } else {
+      // Handle JSON body (backward compatibility)
+      let body
+      try {
+        body = await request.json()
+      } catch {
+        return NextResponse.json({ error: 'Invalid request body' }, { status: 400 })
+      }
+
+      const { imageBase64, imageUrl } = body
+
+      if (imageBase64) {
+        const sizeMB = (imageBase64.length * 0.75) / (1024 * 1024)
+        console.log(`[analyze-image] Base64 payload size: ${sizeMB.toFixed(2)} MB`)
+
+        if (sizeMB > 2) {
+          return NextResponse.json(
+            { error: `Image is too large (${sizeMB.toFixed(1)}MB). Please upload a smaller image.` },
+            { status: 413 }
+          )
+        }
+
+        // Ensure proper data URL format
+        if (imageBase64.startsWith('data:')) {
+          imgSource = imageBase64
+        } else {
+          imgSource = `data:image/jpeg;base64,${imageBase64}`
+        }
+      } else if (imageUrl) {
+        imgSource = imageUrl
+      }
+    }
+
+    if (!imgSource) {
+      return NextResponse.json({ error: 'Image data is required' }, { status: 400 })
+    }
+
+    // Call VLM directly (Vercel serverless is isolated per request, no memory accumulation)
+    console.log('[analyze-image] Calling VLM API directly')
+
+    let zai
+    try {
+      zai = await getZAI()
+    } catch (sdkError) {
+      console.error('[analyze-image] SDK initialization failed:', sdkError)
+      return NextResponse.json({
+        success: true,
+        analysis: createFallbackAnalysis(),
+        rawAnalysis: 'AI SDK initialization failed',
+        fallback: true
+      })
+    }
+
+    let content: string
+    try {
+      const response = await zai.chat.completions.createVision({
+        messages: [{
+          role: 'user',
+          content: [
+            { type: 'text', text: ANALYZE_PROMPT },
+            { type: 'image_url', image_url: { url: imgSource } }
+          ]
+        }],
+        thinking: { type: 'disabled' }
+      })
+
+      content = response.choices?.[0]?.message?.content || ''
+    } catch (vlmError) {
+      console.error('[analyze-image] VLM call failed:', vlmError)
+      return NextResponse.json({
+        success: true,
+        analysis: createFallbackAnalysis(),
+        rawAnalysis: 'Vision model call failed',
+        fallback: true
+      })
+    }
+
+    // Parse JSON from the VLM response
+    let analysis
+    let isFallback = false
+
+    try {
+      const jsonMatch = content.match(/\{[\s\S]*\}/)
+      if (jsonMatch) {
+        analysis = JSON.parse(jsonMatch[0])
+      } else {
+        throw new Error('No JSON found in VLM response')
+      }
+    } catch (parseErr) {
+      console.warn('[analyze-image] Failed to parse VLM response, using fallback')
+      analysis = createFallbackAnalysis()
+      isFallback = true
+    }
+
+    // Validate the analysis
+    if (!analysis?.elements || !Array.isArray(analysis.elements) || analysis.elements.length === 0) {
+      analysis = createFallbackAnalysis()
+      isFallback = true
+    }
+
+    console.log('[analyze-image] Analysis complete, found', analysis.elements?.length || 0, 'elements and', analysis.textElements?.length || 0, 'text elements')
+
+    return NextResponse.json({
+      success: true,
+      analysis,
+      rawAnalysis: isFallback ? content : '',
+      fallback: isFallback
+    })
+  } catch (error) {
+    console.error('[analyze-image] Unhandled error:', error)
+    return NextResponse.json(
+      { error: 'Failed to analyze image. Please try again.' },
+      { status: 500 }
+    )
   }
 }

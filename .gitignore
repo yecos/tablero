@@ -36,7 +36,6 @@ yarn-error.log*
 # vercel
 .vercel
 
-
 # typescript
 *.tsbuildinfo
 next-env.d.ts
@@ -48,7 +47,46 @@ dev.log
 dev.out.log
 test
 prompt
-
 server.log
+
 # Skills directory
 /skills/
+
+# Dev/temp files
+dev*.log
+vlm*.log
+vlm*.json
+tiny_test.txt
+caddy.log
+run.sh
+Caddyfile
+
+# Worker scripts (not needed on Vercel)
+/mini-services/
+
+# Upload directory (not needed in repo)
+/upload/
+
+# Database (local only)
+/db/
+
+# Scripts (dev-only)
+/scripts/
+
+# Lovart reference files
+lovart_*.json
+
+# Test images
+test_image.png
+
+# Worklog
+worklog.md
+
+# zscripts
+/.zscripts/
+
+# Examples (dev reference)
+/examples/
+
+# Download directory
+/download/

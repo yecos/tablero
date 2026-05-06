@@ -1,0 +1,16 @@
+{
+  "framework": "nextjs",
+  "buildCommand": "next build",
+  "installCommand": "npm install",
+  "functions": {
+    "src/app/api/analyze-image/route.ts": {
+      "maxDuration": 60
+    },
+    "src/app/api/split-image/route.ts": {
+      "maxDuration": 120
+    },
+    "src/app/api/generate-image/route.ts": {
+      "maxDuration": 60
+    }
+  }
+}
