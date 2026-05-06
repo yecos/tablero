@@ -27,6 +27,24 @@ export interface Layer {
   elements: string[]
 }
 
+export interface BrandKitData {
+  brandName: string
+  colors: Record<string, string>
+  fonts: {
+    heading: string
+    headingStyle: string
+    body: string
+    bodyStyle: string
+  }
+  voice: {
+    tone: string
+    personality: string[]
+    keywords: string[]
+  }
+  logoConcept: string
+  tagline: string
+}
+
 export interface DesignState {
   elements: DesignElement[]
   layers: Layer[]
@@ -39,6 +57,13 @@ export interface DesignState {
   leftPanelTab: 'layers' | 'assets' | 'templates' | 'brandkit'
   leftPanelOpen: boolean
   chatSidebarOpen: boolean
+  brandKit: BrandKitData | null
+
+  // Undo/Redo
+  history: DesignElement[][]
+  historyIndex: number
+  canUndo: boolean
+  canRedo: boolean
 
   addElement: (element: DesignElement) => void
   removeElement: (id: string) => void
@@ -52,43 +77,150 @@ export interface DesignState {
   setLeftPanelOpen: (open: boolean) => void
   setChatSidebarOpen: (open: boolean) => void
   clearCanvas: () => void
+  setBrandKit: (kit: BrandKitData) => void
+  undo: () => void
+  redo: () => void
+  pushHistory: () => void
+  setCenteredPan: (containerWidth: number, containerHeight: number) => void
 }
 
-export const useDesignStore = create<DesignState>((set) => ({
+const MAX_HISTORY = 50
+
+export const useDesignStore = create<DesignState>((set, get) => ({
   elements: [],
   layers: [{ id: 'default', name: 'Layer 1', visible: true, locked: false, elements: [] }],
   selectedElementId: null,
   zoom: 0.8,
-  panX: typeof window !== 'undefined' ? -((5000 * 0.8) - window.innerWidth / 2) : -3500,
-  panY: typeof window !== 'undefined' ? -((5000 * 0.8) - window.innerHeight / 2) : -2500,
+  panX: 0,
+  panY: 0,
   projectName: 'Untitled Design',
   activeTool: 'select',
   leftPanelTab: 'layers',
   leftPanelOpen: true,
   chatSidebarOpen: true,
+  brandKit: null,
+  history: [[]],
+  historyIndex: 0,
+  canUndo: false,
+  canRedo: false,
+
+  pushHistory: () => {
+    const { elements, history, historyIndex } = get()
+    const snapshot = elements.map(e => ({ ...e }))
+    const newHistory = history.slice(0, historyIndex + 1)
+    newHistory.push(snapshot)
+    if (newHistory.length > MAX_HISTORY) newHistory.shift()
+    const newIndex = newHistory.length - 1
+    set({
+      history: newHistory,
+      historyIndex: newIndex,
+      canUndo: newIndex > 0,
+      canRedo: false,
+    })
+  },
+
+  undo: () => {
+    const { history, historyIndex } = get()
+    if (historyIndex <= 0) return
+    const newIndex = historyIndex - 1
+    const restoredElements = history[newIndex].map(e => ({ ...e }))
+    set({
+      elements: restoredElements,
+      historyIndex: newIndex,
+      canUndo: newIndex > 0,
+      canRedo: newIndex < history.length - 1,
+      selectedElementId: null,
+      layers: [{ id: 'default', name: 'Layer 1', visible: true, locked: false, elements: restoredElements.map(e => e.id) }],
+    })
+  },
+
+  redo: () => {
+    const { history, historyIndex } = get()
+    if (historyIndex >= history.length - 1) return
+    const newIndex = historyIndex + 1
+    const restoredElements = history[newIndex].map(e => ({ ...e }))
+    set({
+      elements: restoredElements,
+      historyIndex: newIndex,
+      canUndo: newIndex > 0,
+      canRedo: newIndex < history.length - 1,
+      selectedElementId: null,
+      layers: [{ id: 'default', name: 'Layer 1', visible: true, locked: false, elements: restoredElements.map(e => e.id) }],
+    })
+  },
+
+  setCenteredPan: (containerWidth: number, containerHeight: number) => {
+    const { zoom } = get()
+    const panX = -(5000 * zoom) + containerWidth / 2
+    const panY = -(5000 * zoom) + containerHeight / 2
+    set({ panX, panY })
+  },
 
   addElement: (element) =>
     set((state) => {
       const newLayers = state.layers.map((layer, i) =>
         i === 0 ? { ...layer, elements: [...layer.elements, element.id] } : layer
       )
-      return { elements: [...state.elements, element], layers: newLayers }
+      const newElements = [...state.elements, element]
+      // Push to history
+      const snapshot = newElements.map(e => ({ ...e }))
+      const newHistory = state.history.slice(0, state.historyIndex + 1)
+      newHistory.push(snapshot)
+      if (newHistory.length > MAX_HISTORY) newHistory.shift()
+      const newIndex = newHistory.length - 1
+      return {
+        elements: newElements,
+        layers: newLayers,
+        history: newHistory,
+        historyIndex: newIndex,
+        canUndo: newIndex > 0,
+        canRedo: false,
+      }
     }),
 
   removeElement: (id) =>
-    set((state) => ({
-      elements: state.elements.filter((e) => e.id !== id),
-      selectedElementId: state.selectedElementId === id ? null : state.selectedElementId,
-      layers: state.layers.map((layer) => ({
-        ...layer,
-        elements: layer.elements.filter((eid) => eid !== id),
-      })),
-    })),
+    set((state) => {
+      const newElements = state.elements.filter((e) => e.id !== id)
+      const snapshot = newElements.map(e => ({ ...e }))
+      const newHistory = state.history.slice(0, state.historyIndex + 1)
+      newHistory.push(snapshot)
+      if (newHistory.length > MAX_HISTORY) newHistory.shift()
+      const newIndex = newHistory.length - 1
+      return {
+        elements: newElements,
+        selectedElementId: state.selectedElementId === id ? null : state.selectedElementId,
+        layers: state.layers.map((layer) => ({
+          ...layer,
+          elements: layer.elements.filter((eid) => eid !== id),
+        })),
+        history: newHistory,
+        historyIndex: newIndex,
+        canUndo: newIndex > 0,
+        canRedo: false,
+      }
+    }),
 
   updateElement: (id, updates) =>
-    set((state) => ({
-      elements: state.elements.map((e) => (e.id === id ? { ...e, ...updates } : e)),
-    })),
+    set((state) => {
+      const newElements = state.elements.map((e) => (e.id === id ? { ...e, ...updates } : e))
+      // Push to history for significant updates (not selection changes)
+      const isSignificant = Object.keys(updates).some(k => k !== 'selected')
+      if (isSignificant) {
+        const snapshot = newElements.map(e => ({ ...e }))
+        const newHistory = state.history.slice(0, state.historyIndex + 1)
+        newHistory.push(snapshot)
+        if (newHistory.length > MAX_HISTORY) newHistory.shift()
+        const newIndex = newHistory.length - 1
+        return {
+          elements: newElements,
+          history: newHistory,
+          historyIndex: newIndex,
+          canUndo: newIndex > 0,
+          canRedo: false,
+        }
+      }
+      return { elements: newElements }
+    }),
 
   selectElement: (id) => set({ selectedElementId: id }),
 
@@ -105,4 +237,5 @@ export const useDesignStore = create<DesignState>((set) => ({
       layers: [{ id: 'default', name: 'Layer 1', visible: true, locked: false, elements: [] }],
       selectedElementId: null,
     }),
+  setBrandKit: (kit) => set({ brandKit: kit }),
 }))

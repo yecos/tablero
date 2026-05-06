@@ -5,24 +5,45 @@ import { useDesignStore } from '@/store/design-store'
 import { cn } from '@/lib/utils'
 
 export function CanvasArea() {
-  const { elements, zoom, panX, panY, setPan, setZoom, selectedElementId, selectElement, updateElement, activeTool, addElement } = useDesignStore()
+  const { elements, zoom, panX, panY, setPan, setZoom, selectedElementId, selectElement, updateElement, activeTool, addElement, setCenteredPan } = useDesignStore()
   const canvasRef = useRef<HTMLDivElement>(null)
   const [isDragging, setIsDragging] = useState(false)
   const [isPanning, setIsPanning] = useState(false)
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 })
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 })
   const [panStart, setPanStart] = useState({ x: 0, y: 0, panXStart: 0, panYStart: 0 })
+  const hasCentered = useRef(false)
 
-  // Handle wheel for zoom
-  const handleWheel = useCallback((e: React.WheelEvent) => {
-    e.preventDefault()
-    if (e.ctrlKey || e.metaKey) {
-      const delta = e.deltaY > 0 ? -0.05 : 0.05
-      setZoom(zoom + delta)
-    } else {
-      setPan(panX - e.deltaX, panY - e.deltaY)
+  // Center canvas on mount based on actual container size
+  useEffect(() => {
+    if (canvasRef.current && !hasCentered.current) {
+      const rect = canvasRef.current.getBoundingClientRect()
+      setCenteredPan(rect.width, rect.height)
+      hasCentered.current = true
     }
-  }, [zoom, panX, panY, setZoom, setPan])
+  }, [setCenteredPan])
+
+  // Non-passive wheel event listener for proper preventDefault
+  useEffect(() => {
+    const container = canvasRef.current
+    if (!container) return
+
+    const handleWheel = (e: WheelEvent) => {
+      e.preventDefault()
+      if (e.ctrlKey || e.metaKey) {
+        const delta = e.deltaY > 0 ? -0.05 : 0.05
+        const currentZoom = useDesignStore.getState().zoom
+        setZoom(currentZoom + delta)
+      } else {
+        const currentPanX = useDesignStore.getState().panX
+        const currentPanY = useDesignStore.getState().panY
+        setPan(currentPanX - e.deltaX, currentPanY - e.deltaY)
+      }
+    }
+
+    container.addEventListener('wheel', handleWheel, { passive: false })
+    return () => container.removeEventListener('wheel', handleWheel)
+  }, [setZoom, setPan])
 
   // Handle canvas click to deselect
   const handleCanvasClick = useCallback((e: React.MouseEvent) => {
@@ -141,7 +162,6 @@ export function CanvasArea() {
         backgroundSize: '24px 24px',
         backgroundColor: '#0a0a0f',
       }}
-      onWheel={handleWheel}
       onClick={handleCanvasClick}
       onMouseDown={handleMouseDown}
       onDoubleClick={handleCanvasDoubleClick}

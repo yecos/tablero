@@ -19,6 +19,7 @@ import {
   Palette,
   Plus,
 } from 'lucide-react'
+import { toast } from 'sonner'
 
 export function LayersPanel() {
   const {
@@ -30,6 +31,8 @@ export function LayersPanel() {
     updateElement,
     leftPanelTab,
     setLeftPanelTab,
+    addElement,
+    brandKit,
   } = useDesignStore()
 
   const tabs = [
@@ -49,13 +52,55 @@ export function LayersPanel() {
   }
 
   const templates = [
-    { name: 'Social Media Post', size: '1080 × 1080' },
-    { name: 'Instagram Story', size: '1080 × 1920' },
-    { name: 'Twitter Header', size: '1500 × 500' },
-    { name: 'YouTube Thumbnail', size: '1280 × 720' },
-    { name: 'Poster', size: '2480 × 3508' },
-    { name: 'Business Card', size: '1050 × 600' },
+    { name: 'Social Media Post', size: '1080 × 1080', width: 400, height: 400, color: '#ec4899' },
+    { name: 'Instagram Story', size: '1080 × 1920', width: 300, height: 500, color: '#f97316' },
+    { name: 'Twitter Header', size: '1500 × 500', width: 500, height: 170, color: '#06b6d4' },
+    { name: 'YouTube Thumbnail', size: '1280 × 720', width: 500, height: 300, color: '#ef4444' },
+    { name: 'Poster', size: '2480 × 3508', width: 350, height: 500, color: '#8b5cf6' },
+    { name: 'Business Card', size: '1050 × 600', width: 350, height: 200, color: '#10b981' },
   ]
+
+  const handleTemplateClick = (template: typeof templates[number]) => {
+    const centerX = 5000 - template.width / 2
+    const centerY = 5000 - template.height / 2
+
+    addElement({
+      id: `template_${Date.now()}`,
+      type: 'shape',
+      x: centerX,
+      y: centerY,
+      width: template.width,
+      height: template.height,
+      rotation: 0,
+      content: template.name,
+      color: template.color,
+      selected: false,
+      locked: false,
+      visible: true,
+      opacity: 1,
+    })
+
+    // Add a title text element on top
+    addElement({
+      id: `template_text_${Date.now()}`,
+      type: 'text',
+      x: centerX + 20,
+      y: centerY + 20,
+      width: template.width - 40,
+      height: 40,
+      rotation: 0,
+      content: template.name,
+      fontSize: 20,
+      fontFamily: 'Inter',
+      color: '#ffffff',
+      selected: false,
+      locked: false,
+      visible: true,
+      opacity: 1,
+    })
+
+    toast.success(`${template.name} template added to canvas`)
+  }
 
   return (
     <div className="w-64 bg-[#12121a] border-r border-white/5 flex flex-col shrink-0 overflow-hidden">
@@ -181,10 +226,28 @@ export function LayersPanel() {
               {templates.map((template) => (
                 <div
                   key={template.name}
-                  className="p-3 rounded-lg bg-white/[0.02] border border-white/5 hover:border-purple-500/20 cursor-pointer transition-colors"
+                  onClick={() => handleTemplateClick(template)}
+                  className="p-3 rounded-lg bg-white/[0.02] border border-white/5 hover:border-purple-500/20 cursor-pointer transition-colors group"
                 >
-                  <span className="text-xs text-white font-medium">{template.name}</span>
-                  <p className="text-[10px] text-slate-500 mt-0.5">{template.size}</p>
+                  <div className="flex items-center gap-2">
+                    <div
+                      className="w-8 h-8 rounded-md shrink-0 flex items-center justify-center"
+                      style={{ backgroundColor: `${template.color}20` }}
+                    >
+                      <div
+                        className="rounded-sm"
+                        style={{
+                          backgroundColor: template.color,
+                          width: template.width > template.height ? 16 : 10,
+                          height: template.width > template.height ? 10 : 16,
+                        }}
+                      />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <span className="text-xs text-white font-medium group-hover:text-purple-300 transition-colors">{template.name}</span>
+                      <p className="text-[10px] text-slate-500 mt-0.5">{template.size}</p>
+                    </div>
+                  </div>
                 </div>
               ))}
             </div>
@@ -194,11 +257,111 @@ export function LayersPanel() {
         {leftPanelTab === 'brandkit' && (
           <div className="p-3">
             <span className="text-xs font-medium text-slate-400 mb-3 block">Brand Kit</span>
-            <div className="text-center py-8">
-              <Palette className="w-8 h-8 text-slate-600 mx-auto mb-2" />
-              <p className="text-xs text-slate-500">No brand kit yet</p>
-              <p className="text-xs text-slate-600 mt-1">Generate one with the AI agent</p>
-            </div>
+            {brandKit ? (
+              <div className="space-y-4">
+                {/* Brand Name */}
+                <div>
+                  <h4 className="text-sm font-semibold text-white">{brandKit.brandName}</h4>
+                </div>
+
+                {/* Colors */}
+                {brandKit.colors && Object.keys(brandKit.colors).length > 0 && (
+                  <div>
+                    <span className="text-[10px] font-medium text-slate-500 uppercase tracking-wider mb-2 block">Colors</span>
+                    <div className="space-y-1.5">
+                      {Object.entries(brandKit.colors).map(([key, value]) => (
+                        <div key={key} className="flex items-center gap-2">
+                          <div
+                            className="w-6 h-6 rounded-md border border-white/10 shrink-0"
+                            style={{ backgroundColor: value }}
+                          />
+                          <span className="text-xs text-slate-300 flex-1">{key}</span>
+                          <span className="text-[10px] text-slate-500 font-mono">{value}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Fonts */}
+                {brandKit.fonts && (
+                  <div>
+                    <span className="text-[10px] font-medium text-slate-500 uppercase tracking-wider mb-2 block">Fonts</span>
+                    <div className="space-y-1.5">
+                      <div className="flex items-center gap-2">
+                        <Type className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                        <span className="text-xs text-slate-300 flex-1">Heading</span>
+                        <span className="text-[10px] text-slate-500">{brandKit.fonts.heading}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Type className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                        <span className="text-xs text-slate-300 flex-1">Body</span>
+                        <span className="text-[10px] text-slate-500">{brandKit.fonts.body}</span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Brand Voice */}
+                {brandKit.voice && (
+                  <div>
+                    <span className="text-[10px] font-medium text-slate-500 uppercase tracking-wider mb-2 block">Brand Voice</span>
+                    <div className="space-y-1.5">
+                      <div>
+                        <span className="text-[10px] text-slate-500">Tone:</span>
+                        <span className="text-xs text-slate-300 ml-1">{brandKit.voice.tone}</span>
+                      </div>
+                      {brandKit.voice.personality && brandKit.voice.personality.length > 0 && (
+                        <div>
+                          <span className="text-[10px] text-slate-500">Personality:</span>
+                          <div className="flex flex-wrap gap-1 mt-1">
+                            {brandKit.voice.personality.map((p) => (
+                              <span key={p} className="text-[10px] px-1.5 py-0.5 rounded bg-purple-500/10 text-purple-300 border border-purple-500/20">
+                                {p}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      {brandKit.voice.keywords && brandKit.voice.keywords.length > 0 && (
+                        <div>
+                          <span className="text-[10px] text-slate-500">Keywords:</span>
+                          <div className="flex flex-wrap gap-1 mt-1">
+                            {brandKit.voice.keywords.map((k) => (
+                              <span key={k} className="text-[10px] px-1.5 py-0.5 rounded bg-cyan-500/10 text-cyan-300 border border-cyan-500/20">
+                                {k}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Logo Concept */}
+                {brandKit.logoConcept && (
+                  <div>
+                    <span className="text-[10px] font-medium text-slate-500 uppercase tracking-wider mb-1 block">Logo Concept</span>
+                    <p className="text-xs text-slate-300 leading-relaxed">{brandKit.logoConcept}</p>
+                  </div>
+                )}
+
+                {/* Tagline */}
+                {brandKit.tagline && (
+                  <div>
+                    <span className="text-[10px] font-medium text-slate-500 uppercase tracking-wider mb-1 block">Tagline</span>
+                    <p className="text-xs text-purple-300 italic">&ldquo;{brandKit.tagline}&rdquo;</p>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="text-center py-8">
+                <Palette className="w-8 h-8 text-slate-600 mx-auto mb-2" />
+                <p className="text-xs text-slate-500">No brand kit yet</p>
+                <p className="text-xs text-slate-600 mt-1">Generate one with the AI agent</p>
+              </div>
+            )}
           </div>
         )}
       </ScrollArea>

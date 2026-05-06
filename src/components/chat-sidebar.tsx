@@ -9,6 +9,8 @@ import { Input } from '@/components/ui/input'
 import { Separator } from '@/components/ui/separator'
 import { Sparkles, Send, Loader2, Image, Palette, PenTool, LayoutTemplate } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import ReactMarkdown from 'react-markdown'
+import { toast } from 'sonner'
 
 interface ChatSidebarProps {
   onClose: () => void
@@ -16,7 +18,7 @@ interface ChatSidebarProps {
 
 export function ChatSidebar({ onClose }: ChatSidebarProps) {
   const { messages, isGenerating, addMessage, updateMessage, setIsGenerating } = useChatStore()
-  const { addElement, setLeftPanelTab, setLeftPanelOpen } = useDesignStore()
+  const { addElement, setLeftPanelTab, setLeftPanelOpen, setBrandKit } = useDesignStore()
   const [input, setInput] = useState('')
   const [isSending, setIsSending] = useState(false)
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -72,6 +74,7 @@ export function ChatSidebar({ onClose }: ChatSidebarProps) {
         content: 'Sorry, I encountered an error. Please try again.',
         isLoading: false,
       })
+      toast.error('Failed to get AI response')
     } finally {
       setIsGenerating(false)
       setIsSending(false)
@@ -84,6 +87,7 @@ export function ChatSidebar({ onClose }: ChatSidebarProps) {
     setIsGenerating(true)
     addMessage({ role: 'user', content: `Generate image: ${prompt}` })
     const aiMsgId = addMessage({ role: 'assistant', content: 'Generating your image... ✨', isLoading: true })
+    toast.loading('Generating image...', { id: 'gen-image' })
 
     try {
       const response = await fetch('/api/generate-image', {
@@ -120,17 +124,20 @@ export function ChatSidebar({ onClose }: ChatSidebarProps) {
           visible: true,
           opacity: 1,
         })
+        toast.success('Image generated and added to canvas', { id: 'gen-image' })
       } else {
         updateMessage(aiMsgId, {
           content: 'I couldn\'t generate an image right now. Please try again.',
           isLoading: false,
         })
+        toast.error('Image generation failed', { id: 'gen-image' })
       }
     } catch {
       updateMessage(aiMsgId, {
         content: 'Failed to generate image. Please try again.',
         isLoading: false,
       })
+      toast.error('Failed to generate image', { id: 'gen-image' })
     } finally {
       setIsGenerating(false)
     }
@@ -142,6 +149,7 @@ export function ChatSidebar({ onClose }: ChatSidebarProps) {
     setIsGenerating(true)
     addMessage({ role: 'user', content: `Generate brand kit for: ${description}` })
     const aiMsgId = addMessage({ role: 'assistant', content: 'Creating your brand kit... 🎨', isLoading: true })
+    toast.loading('Generating brand kit...', { id: 'gen-brandkit' })
 
     try {
       const response = await fetch('/api/brand-kit', {
@@ -154,6 +162,9 @@ export function ChatSidebar({ onClose }: ChatSidebarProps) {
 
       const data = await response.json()
       const kit = data.brandKit
+
+      // Save brand kit to design store
+      setBrandKit(kit)
 
       const brandMessage = `Here's your brand kit for **${kit.brandName}**! 🎨
 
@@ -198,11 +209,13 @@ ${Object.entries(kit.colors || {}).map(([key, val]) => `• ${key}: \`${val}\``)
           opacity: 1,
         })
       })
+      toast.success('Brand kit generated!', { id: 'gen-brandkit' })
     } catch {
       updateMessage(aiMsgId, {
         content: 'Failed to generate brand kit. Please try again.',
         isLoading: false,
       })
+      toast.error('Failed to generate brand kit', { id: 'gen-brandkit' })
     } finally {
       setIsGenerating(false)
     }
@@ -252,7 +265,7 @@ ${Object.entries(kit.colors || {}).map(([key, val]) => `• ${key}: \`${val}\``)
 
       {/* Messages */}
       <ScrollArea className="flex-1 p-4">
-        <div className="space-y-4">
+        <div ref={scrollRef} className="space-y-4">
           {messages.length === 0 && (
             <div className="text-center py-8">
               <div className="w-12 h-12 rounded-2xl bg-gradient-to-r from-purple-500/20 to-cyan-500/20 flex items-center justify-center mx-auto mb-4">
@@ -293,7 +306,23 @@ ${Object.entries(kit.colors || {}).map(([key, val]) => `• ${key}: \`${val}\``)
                   </div>
                 ) : (
                   <>
-                    <div className="whitespace-pre-wrap">{message.content}</div>
+                    {message.role === 'assistant' ? (
+                      <div className="chat-markdown prose prose-invert prose-xs max-w-none [&_p]:mb-1 [&_p:last-child]:mb-0 [&_ul]:mb-1 [&_ol]:mb-1 [&_li]:mb-0.5 [&_strong]:text-white [&_em]:text-purple-300 [&_code]:bg-white/10 [&_code]:px-1 [&_code]:rounded [&_code]:text-purple-300 [&_code]:text-[11px] [&_h1]:text-sm [&_h1]:font-bold [&_h1]:text-white [&_h2]:text-sm [&_h2]:font-bold [&_h2]:text-white [&_h3]:text-xs [&_h3]:font-bold [&_h3]:text-white [&_a]:text-cyan-400 [&_a]:underline">
+                        <ReactMarkdown
+                          components={{
+                            a: ({ children, ...props }) => (
+                              <a {...props} target="_blank" rel="noopener noreferrer">
+                                {children}
+                              </a>
+                            ),
+                          }}
+                        >
+                          {message.content}
+                        </ReactMarkdown>
+                      </div>
+                    ) : (
+                      <div className="whitespace-pre-wrap">{message.content}</div>
+                    )}
                     {message.images && message.images.length > 0 && (
                       <div className="mt-2 space-y-2">
                         {message.images.map((img, i) => (
