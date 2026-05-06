@@ -93,14 +93,36 @@ export function ImageSplitPanel() {
         imageUrl = originalImage.src
       }
 
-      const response = await fetch('/api/analyze-image', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ imageBase64, imageUrl }),
-      })
+      // Try the API call with retry logic (server may crash and restart due to memory pressure)
+      let response: Response | null = null
+      let lastError: string | null = null
+      const maxRetries = 2
+
+      for (let attempt = 0; attempt <= maxRetries; attempt++) {
+        try {
+          response = await fetch('/api/analyze-image', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ imageBase64, imageUrl }),
+          })
+          break // Success - exit retry loop
+        } catch (fetchErr) {
+          lastError = fetchErr instanceof Error ? fetchErr.message : 'Network error'
+          console.warn(`[analyze] Attempt ${attempt + 1} failed:`, lastError)
+          if (attempt < maxRetries) {
+            // Server might be restarting - wait before retrying
+            toast('Server reconnecting...', { description: `Retrying in ${3 + attempt * 2}s...` })
+            await new Promise(r => setTimeout(r, (3 + attempt * 2) * 1000))
+          }
+        }
+      }
+
+      if (!response) {
+        throw new Error(`Could not reach the analysis server after ${maxRetries + 1} attempts. The server may be overloaded - please try again in a moment.`)
+      }
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: 'Unknown server error' }))
+        const errorData = await response.json().catch(() => ({ error: `Server error (${response!.status})` }))
         throw new Error(errorData.error || `Server error ${response.status}`)
       }
 

@@ -1,25 +1,31 @@
 import { NextRequest, NextResponse } from 'next/server'
-import ZAI from 'z-ai-web-dev-sdk'
+import { writeFile, unlink, mkdir } from 'fs/promises'
+import { existsSync } from 'fs'
+import { execFile } from 'child_process'
+import { promisify } from 'util'
+import path from 'path'
 
-let zaiInstance: Awaited<ReturnType<typeof ZAI.create>> | null = null
+const execFileAsync = promisify(execFile)
 
-async function getZAI() {
-  if (!zaiInstance) {
-    zaiInstance = await ZAI.create()
-  }
-  return zaiInstance
-}
-
-export const maxDuration = 60 // Allow up to 60 seconds for VLM processing
-
-// Increase body size limit for base64 image payloads
+export const maxDuration = 60
 export const dynamic = 'force-dynamic'
+
+const TEMP_DIR = path.join(process.cwd(), 'upload', 'temp')
+const WORKER_SCRIPT = path.join(process.cwd(), 'mini-services', 'vlm-worker.js')
+
+async function ensureTempDir() {
+  if (!existsSync(TEMP_DIR)) {
+    await mkdir(TEMP_DIR, { recursive: true })
+  }
+}
 
 export async function POST(request: NextRequest) {
   console.log('[analyze-image] Request received')
 
+  let tempFilePath: string | null = null
+
   try {
-    // Parse request body with error handling
+    // Parse request body
     let body
     try {
       body = await request.json()
@@ -33,157 +39,103 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Image data (base64 or URL) is required' }, { status: 400 })
     }
 
-    // Log payload size for debugging
+    // Determine the input for the worker script
+    let workerInput: string
+
     if (imageBase64) {
       const sizeMB = (imageBase64.length * 0.75) / (1024 * 1024)
       console.log(`[analyze-image] Base64 payload size: ${sizeMB.toFixed(2)} MB`)
 
-      // Reject payloads that are too large (> 3MB decoded) - they will cause VLM timeouts
-      if (sizeMB > 3) {
-        console.error('[analyze-image] Payload too large:', sizeMB.toFixed(2), 'MB')
+      if (sizeMB > 1) {
         return NextResponse.json(
-          { error: 'Image is too large for analysis. Please upload a smaller image (recommended: under 1MB).' },
+          { error: `Image is too large (${sizeMB.toFixed(1)}MB). Please upload a smaller image.` },
           { status: 413 }
         )
       }
+
+      // Save base64 to a temp file for the worker to read
+      await ensureTempDir()
+      const tempId = `analyze_${Date.now()}_${Math.random().toString(36).slice(2, 8)}.jpg`
+      tempFilePath = path.join(TEMP_DIR, tempId)
+
+      const buffer = Buffer.from(imageBase64, 'base64')
+      await writeFile(tempFilePath, buffer)
+      console.log('[analyze-image] Saved temp image:', tempFilePath, `(${(buffer.length / 1024).toFixed(1)} KB)`)
+
+      workerInput = tempFilePath
+    } else {
+      workerInput = imageUrl!
     }
 
-    // Initialize SDK
-    let zai
-    try {
-      zai = await getZAI()
-    } catch (sdkError) {
-      console.error('[analyze-image] SDK initialization failed:', sdkError)
-      return NextResponse.json(
-        { error: 'AI service unavailable. Please try again.' },
-        { status: 503 }
-      )
-    }
+    console.log('[analyze-image] Spawning VLM worker process...')
 
-    // Build the image source for VLM
-    // Client-side already compresses images to max 512px JPEG before sending
-    const imgSource = imageBase64
-      ? `data:image/jpeg;base64,${imageBase64}`
-      : imageUrl
-
-    console.log('[analyze-image] Starting VLM analysis, image source type:', imageBase64 ? 'base64' : 'url')
-
-    // Step 1: Analyze the image with VLM to identify all visual elements
-    const analysisPrompt = `You are an expert design analysis AI. Analyze this image carefully and identify ALL distinct visual elements that could be separated into editable layers.
-
-For each element, provide:
-- A descriptive name (e.g., "Background", "Main Subject", "Title Text", "Logo", "Decorative Element")
-- The type: one of "background", "subject", "text", "object", "decoration", "effect"
-- A brief description of what it looks like and its visual characteristics
-- Approximate position: one of "full", "top", "bottom", "left", "right", "center", "top-left", "top-right", "bottom-left", "bottom-right"
-- A detailed prompt that could be used to regenerate JUST this element on a transparent background (for subjects/objects) or as a complete scene (for backgrounds)
-- A prompt to regenerate the background WITHOUT this element (for inpainting/generative completion)
-
-IMPORTANT: You must respond ONLY with valid JSON in this exact format, no additional text:
-{
-  "description": "Overall description of the image",
-  "style": "Visual style description (e.g., modern minimalist, vintage, photorealistic)",
-  "elements": [
-    {
-      "id": "bg_1",
-      "name": "Background",
-      "type": "background",
-      "description": "Description of the background",
-      "position": "full",
-      "generatePrompt": "Prompt to generate just this element",
-      "removePrompt": "Prompt to generate the background without foreground elements"
-    },
-    {
-      "id": "sub_1",
-      "name": "Main Subject",
-      "type": "subject",
-      "description": "Description of the main subject",
-      "position": "center",
-      "generatePrompt": "Prompt to generate this subject on transparent background",
-      "removePrompt": "Prompt to generate the scene without this subject"
-    }
-  ],
-  "textElements": [
-    {
-      "id": "txt_1",
-      "text": "The actual text content",
-      "name": "Headline",
-      "style": "Description of typography style (font weight, color, effects, shadows, perspective)",
-      "position": "top-center",
-      "fontSize": "approximate relative size (large/medium/small)"
-    }
-  ]
-}`
-
-    let analysisResponse
-    try {
-      analysisResponse = await zai.chat.completions.createVision({
-        messages: [
-          {
-            role: 'user',
-            content: [
-              { type: 'text', text: analysisPrompt },
-              { type: 'image_url', image_url: { url: imgSource } }
-            ]
-          }
-        ],
-        thinking: { type: 'disabled' }
-      })
-    } catch (vlmError: unknown) {
-      console.error('[analyze-image] VLM call failed:', vlmError)
-      const errMsg = vlmError instanceof Error ? vlmError.message : String(vlmError)
-      // If VLM fails, return fallback analysis so UI still works
-      return NextResponse.json({
-        success: true,
-        analysis: createFallbackAnalysis(),
-        rawAnalysis: `VLM analysis failed: ${errMsg}`,
-        fallback: true
-      })
-    }
-
-    const analysisText = analysisResponse.choices?.[0]?.message?.content || ''
-
-    if (!analysisText) {
-      console.error('[analyze-image] Empty VLM response')
-      return NextResponse.json({
-        success: true,
-        analysis: createFallbackAnalysis(),
-        rawAnalysis: '',
-        fallback: true
-      })
-    }
-
-    console.log('[analyze-image] VLM response length:', analysisText.length)
-
-    // Parse the JSON response - handle potential markdown code blocks
-    let analysis
-    try {
-      const jsonMatch = analysisText.match(/\{[\s\S]*\}/)
-      if (jsonMatch) {
-        analysis = JSON.parse(jsonMatch[0])
-      } else {
-        throw new Error('No JSON found in response')
+    // Run the VLM worker as a SEPARATE process to isolate memory usage.
+    // The worker reads the image file, calls the VLM API, outputs JSON, and exits.
+    // This prevents the Next.js server from accumulating memory from VLM SDK calls.
+    const { stdout, stderr } = await execFileAsync(
+      'node',
+      [WORKER_SCRIPT, workerInput, 'analyze'],
+      {
+        timeout: 55000,
+        maxBuffer: 5 * 1024 * 1024,
+        env: { ...process.env }
       }
-    } catch (parseError) {
-      console.error('[analyze-image] JSON parse failed:', parseError)
-      analysis = createFallbackAnalysis()
+    )
+
+    // Clean up temp file
+    if (tempFilePath) {
+      try { await unlink(tempFilePath) } catch { /* ignore */ }
+      tempFilePath = null
     }
 
-    // Validate the analysis has the minimum required structure
-    if (!analysis.elements || !Array.isArray(analysis.elements) || analysis.elements.length === 0) {
-      console.error('[analyze-image] Invalid analysis structure, using fallback')
-      analysis = createFallbackAnalysis()
+    // Parse the worker output
+    let result
+    try {
+      result = JSON.parse(stdout.trim())
+    } catch {
+      console.error('[analyze-image] Worker output parse failed')
+      console.error('[analyze-image] stdout:', stdout.substring(0, 300))
+      if (stderr) console.error('[analyze-image] stderr:', stderr.substring(0, 300))
+
+      return NextResponse.json({
+        success: true,
+        analysis: createFallbackAnalysis(),
+        rawAnalysis: 'Worker process returned invalid output',
+        fallback: true
+      })
     }
 
-    console.log('[analyze-image] Analysis complete, found', analysis.elements?.length || 0, 'elements and', analysis.textElements?.length || 0, 'text elements')
+    if (result.error && !result.analysis) {
+      console.error('[analyze-image] Worker error:', result.error)
+      return NextResponse.json({
+        success: true,
+        analysis: createFallbackAnalysis(),
+        rawAnalysis: result.error,
+        fallback: true
+      })
+    }
+
+    // Validate the analysis
+    if (!result.analysis?.elements || !Array.isArray(result.analysis.elements) || result.analysis.elements.length === 0) {
+      result.analysis = createFallbackAnalysis()
+      result.fallback = true
+    }
+
+    console.log('[analyze-image] Analysis complete, found', result.analysis?.elements?.length || 0, 'elements and', result.analysis?.textElements?.length || 0, 'text elements')
 
     return NextResponse.json({
       success: true,
-      analysis,
-      rawAnalysis: analysisText
+      analysis: result.analysis,
+      rawAnalysis: result.rawAnalysis || '',
+      fallback: result.fallback || false
     })
   } catch (error) {
     console.error('[analyze-image] Unhandled error:', error)
+
+    if (tempFilePath) {
+      try { await unlink(tempFilePath) } catch { /* ignore */ }
+    }
+
     return NextResponse.json(
       { error: 'Failed to analyze image. Please try again.' },
       { status: 500 }
@@ -197,27 +149,21 @@ function createFallbackAnalysis() {
     style: 'general',
     elements: [
       {
-        id: 'bg_1',
-        name: 'Background',
-        type: 'background',
+        id: 'bg_1', name: 'Background', type: 'background',
         description: 'The complete background scene of the image',
         position: 'full',
         generatePrompt: 'Generate a background scene matching the original image style and context, complete composition',
         removePrompt: 'Empty background scene with the same style'
       },
       {
-        id: 'sub_1',
-        name: 'Main Subject',
-        type: 'subject',
+        id: 'sub_1', name: 'Main Subject', type: 'subject',
         description: 'The main subject or foreground element in the image',
         position: 'center',
         generatePrompt: 'Generate the main subject from the image on a clean transparent background, isolated and detailed',
         removePrompt: 'The background scene without the main subject'
       },
       {
-        id: 'obj_1',
-        name: 'Foreground Objects',
-        type: 'object',
+        id: 'obj_1', name: 'Foreground Objects', type: 'object',
         description: 'Secondary objects and decorative elements in the scene',
         position: 'center',
         generatePrompt: 'Generate the secondary objects and decorative elements from the image on transparent background',

@@ -1,13 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import ZAI from 'z-ai-web-dev-sdk'
 
-let zaiInstance: Awaited<ReturnType<typeof ZAI.create>> | null = null
-
+// Create a fresh ZAI instance per request to avoid memory accumulation
 async function getZAI() {
-  if (!zaiInstance) {
-    zaiInstance = await ZAI.create()
-  }
-  return zaiInstance
+  return await ZAI.create()
 }
 
 interface LayerRequest {
