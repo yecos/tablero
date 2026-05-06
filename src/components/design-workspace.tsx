@@ -5,6 +5,7 @@ import { Toolbar } from './toolbar'
 import { LayersPanel } from './layers-panel'
 import { CanvasArea } from './canvas-area'
 import { ChatSidebar } from './chat-sidebar'
+import { ImageSplitPanel } from './image-split-panel'
 import { useDesignStore } from '@/store/design-store'
 
 interface DesignWorkspaceProps {
@@ -12,7 +13,7 @@ interface DesignWorkspaceProps {
 }
 
 export function DesignWorkspace({ onClose }: DesignWorkspaceProps) {
-  const { leftPanelOpen, chatSidebarOpen } = useDesignStore()
+  const { leftPanelOpen, chatSidebarOpen, imageSplit } = useDesignStore()
 
   // Prevent body scroll when workspace is open
   useEffect(() => {
@@ -25,11 +26,18 @@ export function DesignWorkspace({ onClose }: DesignWorkspaceProps) {
   // Handle escape key
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose()
+      if (e.key === 'Escape') {
+        // Close split panel first if open
+        if (imageSplit.showSplitPanel) {
+          useDesignStore.getState().closeSplitPanel()
+        } else {
+          onClose()
+        }
+      }
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [onClose])
+  }, [onClose, imageSplit.showSplitPanel])
 
   return (
     <div className="fixed inset-0 z-[100] bg-[#0a0a0f] flex flex-col animate-in fade-in duration-200">
@@ -37,15 +45,18 @@ export function DesignWorkspace({ onClose }: DesignWorkspaceProps) {
       <Toolbar onClose={onClose} />
 
       {/* Main Content */}
-      <div className="flex-1 flex overflow-hidden">
+      <div className="flex-1 flex overflow-hidden relative">
         {/* Left Panel */}
         {leftPanelOpen && <LayersPanel />}
 
         {/* Canvas */}
         <CanvasArea />
 
+        {/* Image Split Panel (overlays the right side) */}
+        <ImageSplitPanel />
+
         {/* Chat Sidebar */}
-        {chatSidebarOpen && <ChatSidebar onClose={() => useDesignStore.getState().setChatSidebarOpen(false)} />}
+        {chatSidebarOpen && !imageSplit.showSplitPanel && <ChatSidebar onClose={() => useDesignStore.getState().setChatSidebarOpen(false)} />}
       </div>
     </div>
   )

@@ -3,15 +3,18 @@
 import { useRef, useState, useCallback, useEffect } from 'react'
 import { useDesignStore } from '@/store/design-store'
 import { cn } from '@/lib/utils'
+import { toast } from 'sonner'
 
 export function CanvasArea() {
   const { elements, zoom, panX, panY, setPan, setZoom, selectedElementId, selectElement, updateElement, activeTool, addElement, setCenteredPan } = useDesignStore()
   const canvasRef = useRef<HTMLDivElement>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
   const [isDragging, setIsDragging] = useState(false)
   const [isPanning, setIsPanning] = useState(false)
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 })
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 })
   const [panStart, setPanStart] = useState({ x: 0, y: 0, panXStart: 0, panYStart: 0 })
+  const [isDragOver, setIsDragOver] = useState(false)
   const hasCentered = useRef(false)
 
   // Center canvas on mount based on actual container size
@@ -73,7 +76,7 @@ export function CanvasArea() {
     }
   }, [panX, panY])
 
-  // Handle double click for text tool
+  // Handle double click for text/shape tools
   const handleCanvasDoubleClick = useCallback((e: React.MouseEvent) => {
     if (activeTool === 'text') {
       const rect = canvasRef.current?.getBoundingClientRect()
@@ -153,20 +156,225 @@ export function CanvasArea() {
     }
   }, [isDragging, isPanning, dragStart, dragOffset, panStart, selectedElementId, zoom, updateElement, setPan])
 
+  // Image upload handler
+  const handleImageUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files
+    if (!files || files.length === 0) return
+
+    Array.from(files).forEach((file) => {
+      if (!file.type.startsWith('image/')) {
+        toast.error(`${file.name} is not an image file`)
+        return
+      }
+
+      const reader = new FileReader()
+      reader.onload = (event) => {
+        const src = event.target?.result as string
+        if (!src) return
+
+        // Create a temporary image to get dimensions
+        const img = new Image()
+        img.onload = () => {
+          const maxDim = 500
+          const ratio = Math.min(maxDim / img.width, maxDim / img.height, 1)
+          const width = img.width * ratio
+          const height = img.height * ratio
+
+          addElement({
+            id: `upload_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+            type: 'image',
+            x: 5000 - width / 2 + Math.random() * 100 - 50,
+            y: 5000 - height / 2 + Math.random() * 100 - 50,
+            width,
+            height,
+            rotation: 0,
+            content: file.name,
+            src,
+            selected: false,
+            locked: false,
+            visible: true,
+            opacity: 1,
+          })
+          toast.success(`${file.name} added to canvas`)
+        }
+        img.src = src
+      }
+      reader.readAsDataURL(file)
+    })
+
+    // Reset input
+    if (fileInputRef.current) {
+      fileInputRef.current.value = ''
+    }
+  }, [addElement])
+
+  // Handle toolbar Image tool click
+  useEffect(() => {
+    if (activeTool === 'image' && fileInputRef.current) {
+      fileInputRef.current.click()
+      // Reset to select tool after opening file dialog
+      useDesignStore.getState().setActiveTool('select')
+    }
+  }, [activeTool])
+
+  // Drag and drop support
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setIsDragOver(true)
+  }, [])
+
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setIsDragOver(false)
+  }, [])
+
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setIsDragOver(false)
+
+    const files = e.dataTransfer.files
+    if (!files || files.length === 0) return
+
+    Array.from(files).forEach((file) => {
+      if (!file.type.startsWith('image/')) return
+
+      const reader = new FileReader()
+      reader.onload = (event) => {
+        const src = event.target?.result as string
+        if (!src) return
+
+        const img = new Image()
+        img.onload = () => {
+          const maxDim = 500
+          const ratio = Math.min(maxDim / img.width, maxDim / img.height, 1)
+          const width = img.width * ratio
+          const height = img.height * ratio
+
+          // Calculate position from drop coordinates
+          const rect = canvasRef.current?.getBoundingClientRect()
+          const x = rect ? (e.clientX - rect.left - panX) / zoom - width / 2 : 5000 - width / 2
+          const y = rect ? (e.clientY - rect.top - panY) / zoom - height / 2 : 5000 - height / 2
+
+          addElement({
+            id: `drop_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+            type: 'image',
+            x,
+            y,
+            width,
+            height,
+            rotation: 0,
+            content: file.name,
+            src,
+            selected: false,
+            locked: false,
+            visible: true,
+            opacity: 1,
+          })
+          toast.success(`${file.name} added to canvas`)
+        }
+        img.src = src
+      }
+      reader.readAsDataURL(file)
+    })
+  }, [panX, panY, zoom, addElement])
+
+  // Handle Edit Elements click
+  const handleEditElements = useCallback(() => {
+    if (!selectedElementId) return
+    const element = elements.find(e => e.id === selectedElementId)
+    if (!element || element.type !== 'image' || !element.src) {
+      toast.error('Select an image to edit elements')
+      return
+    }
+
+    // Start the analysis process
+    const { startImageAnalysis } = useDesignStore.getState()
+    startImageAnalysis(element.id)
+
+    // Trigger the actual analysis
+    const analyzeImage = async () => {
+      try {
+        let imageBase64 = null
+        if (element.src.startsWith('data:')) {
+          imageBase64 = element.src.split(',')[1]
+        }
+
+        const response = await fetch('/api/analyze-image', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            imageBase64,
+            imageUrl: imageBase64 ? undefined : element.src,
+          }),
+        })
+
+        if (!response.ok) throw new Error('Analysis failed')
+
+        const data = await response.json()
+
+        if (data.success && data.analysis) {
+          useDesignStore.getState().completeImageAnalysis(data.analysis)
+          toast.success('Image analyzed! Review elements in the panel.')
+        } else {
+          toast.error('Analysis returned no results')
+          useDesignStore.getState().closeSplitPanel()
+        }
+      } catch (error) {
+        console.error('Analysis error:', error)
+        toast.error('Failed to analyze image. Please try again.')
+        useDesignStore.getState().closeSplitPanel()
+      }
+    }
+
+    analyzeImage()
+  }, [selectedElementId, elements])
+
+  // Get selected element for context menu
+  const selectedElement = elements.find(e => e.id === selectedElementId)
+
   return (
     <div
       ref={canvasRef}
-      className="flex-1 overflow-hidden relative cursor-crosshair"
+      className={cn(
+        'flex-1 overflow-hidden relative cursor-crosshair transition-colors',
+        isDragOver ? 'bg-purple-500/5' : ''
+      )}
       style={{
         backgroundImage: `radial-gradient(circle, rgba(255,255,255,0.04) 1px, transparent 1px)`,
         backgroundSize: '24px 24px',
-        backgroundColor: '#0a0a0f',
+        backgroundColor: isDragOver ? '#0f0a1a' : '#0a0a0f',
       }}
       onClick={handleCanvasClick}
       onMouseDown={handleMouseDown}
       onDoubleClick={handleCanvasDoubleClick}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
       data-canvas="true"
     >
+      {/* Hidden file input for image upload */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        multiple
+        className="hidden"
+        onChange={handleImageUpload}
+      />
+
+      {/* Drag overlay */}
+      {isDragOver && (
+        <div className="absolute inset-0 z-40 flex items-center justify-center pointer-events-none">
+          <div className="px-8 py-6 rounded-2xl border-2 border-dashed border-purple-500/50 bg-purple-500/10 backdrop-blur-sm">
+            <p className="text-sm text-purple-300 font-medium">Drop images here</p>
+            <p className="text-xs text-slate-500 mt-1">Images will be added to the canvas</p>
+          </div>
+        </div>
+      )}
+
       {/* Canvas content with transform */}
       <div
         className="absolute origin-top-left"
@@ -191,7 +399,8 @@ export function CanvasArea() {
               'absolute group',
               element.visible ? '' : 'hidden',
               selectedElementId === element.id ? 'ring-2 ring-purple-500 ring-offset-2 ring-offset-[#0a0a0f]' : '',
-              isDragging && selectedElementId === element.id ? 'cursor-grabbing' : 'cursor-grab'
+              isDragging && selectedElementId === element.id ? 'cursor-grabbing' : 'cursor-grab',
+              element.isEditableLayer ? 'ring-1 ring-cyan-500/20 ring-offset-1 ring-offset-[#0a0a0f]' : ''
             )}
             style={{
               left: element.x,
@@ -230,6 +439,13 @@ export function CanvasArea() {
               />
             )}
 
+            {/* Editable layer badge */}
+            {element.isEditableLayer && (
+              <div className="absolute -top-2 left-2 px-1.5 py-0.5 rounded-md bg-cyan-500/20 border border-cyan-500/30">
+                <span className="text-[8px] text-cyan-300 font-medium">{element.layerName || 'Layer'}</span>
+              </div>
+            )}
+
             {/* Selection handles */}
             {selectedElementId === element.id && (
               <>
@@ -237,6 +453,23 @@ export function CanvasArea() {
                 <div className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-white rounded-full border border-purple-500 cursor-ne-resize" />
                 <div className="absolute -bottom-1 -left-1 w-2.5 h-2.5 bg-white rounded-full border border-purple-500 cursor-sw-resize" />
                 <div className="absolute -bottom-1 -right-1 w-2.5 h-2.5 bg-white rounded-full border border-purple-500 cursor-se-resize" />
+
+                {/* Edit Elements button for images */}
+                {element.type === 'image' && !element.isEditableLayer && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      handleEditElements()
+                    }}
+                    className="absolute -bottom-8 left-1/2 -translate-x-1/2 px-3 py-1 rounded-lg bg-gradient-to-r from-purple-600 to-cyan-500 text-white text-[10px] font-medium flex items-center gap-1.5 hover:from-purple-500 hover:to-cyan-400 transition-colors shadow-lg whitespace-nowrap"
+                  >
+                    <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" />
+                      <circle cx="12" cy="12" r="3" />
+                    </svg>
+                    Edit Elements
+                  </button>
+                )}
               </>
             )}
           </div>
@@ -250,7 +483,10 @@ export function CanvasArea() {
           {elements.map((el) => (
             <div
               key={el.id}
-              className="absolute bg-purple-500/30 rounded-sm"
+              className={cn(
+                'absolute rounded-sm',
+                el.isEditableLayer ? 'bg-cyan-500/30' : 'bg-purple-500/30'
+              )}
               style={{
                 left: `${(el.x / 10000) * 100}%`,
                 top: `${(el.y / 10000) * 100}%`,
@@ -261,6 +497,24 @@ export function CanvasArea() {
           ))}
         </div>
       </div>
+
+      {/* Selected element info */}
+      {selectedElement && selectedElement.type === 'image' && (
+        <div className="absolute bottom-4 left-40 px-3 py-2 rounded-lg bg-[#12121a]/90 backdrop-blur-sm border border-white/5">
+          <div className="flex items-center gap-2">
+            <div className={cn(
+              'w-2 h-2 rounded-full',
+              selectedElement.isEditableLayer ? 'bg-cyan-400' : 'bg-purple-400'
+            )} />
+            <span className="text-[10px] text-slate-400">
+              {selectedElement.isEditableLayer
+                ? `${selectedElement.layerName || 'Editable Layer'}`
+                : `${selectedElement.content || 'Image'} - Click "Edit Elements" to decompose`
+              }
+            </span>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

@@ -47,6 +47,7 @@ export function LayersPanel() {
       case 'image': return Image
       case 'text': return Type
       case 'shape': return Square
+      case 'group': return Layers
       default: return Square
     }
   }
@@ -151,14 +152,21 @@ export function LayersPanel() {
                       className={cn(
                         'flex items-center gap-2 p-2 rounded-lg cursor-pointer transition-colors group',
                         selectedElementId === element.id
-                          ? 'bg-purple-500/10 border border-purple-500/20'
+                          ? element.isEditableLayer
+                            ? 'bg-cyan-500/10 border border-cyan-500/20'
+                            : 'bg-purple-500/10 border border-purple-500/20'
                           : 'hover:bg-white/[0.03] border border-transparent'
                       )}
                     >
-                      <Icon className="w-4 h-4 text-slate-400 shrink-0" />
-                      <span className="text-xs text-slate-300 truncate flex-1">
-                        {element.type === 'text' ? element.content : `${element.type} ${index + 1}`}
-                      </span>
+                      <Icon className={cn('w-4 h-4 shrink-0', element.isEditableLayer ? 'text-cyan-400' : 'text-slate-400')} />
+                      <div className='flex-1 min-w-0'>
+                        <span className={cn('text-xs truncate block', element.isEditableLayer ? 'text-cyan-300' : 'text-slate-300')}>
+                          {element.isEditableLayer ? element.layerName : element.type === 'text' ? element.content : `${element.type} ${index + 1}`}
+                        </span>
+                        {element.isEditableLayer && (
+                          <span className='text-[9px] text-cyan-500/70'>{element.layerType} layer</span>
+                        )}
+                      </div>
                       <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
                         <button
                           onClick={(e) => {
@@ -211,10 +219,95 @@ export function LayersPanel() {
         {leftPanelTab === 'assets' && (
           <div className="p-3">
             <span className="text-xs font-medium text-slate-400 mb-3 block">Uploaded Assets</span>
-            <div className="text-center py-8">
-              <FolderOpen className="w-8 h-8 text-slate-600 mx-auto mb-2" />
-              <p className="text-xs text-slate-500">No assets yet</p>
-              <p className="text-xs text-slate-600 mt-1">Upload images or generate with AI</p>
+            {/* Upload button */}
+            <label className="flex items-center justify-center gap-2 p-3 rounded-lg border border-dashed border-white/10 hover:border-purple-500/30 hover:bg-purple-500/5 cursor-pointer transition-colors mb-3">
+              <Plus className="w-4 h-4 text-purple-400" />
+              <span className="text-xs text-slate-400">Upload Image</span>
+              <input
+                type="file"
+                accept="image/*"
+                multiple
+                className="hidden"
+                onChange={(e) => {
+                  const files = e.target.files
+                  if (!files || files.length === 0) return
+                  Array.from(files).forEach((file) => {
+                    if (!file.type.startsWith('image/')) return
+                    const reader = new FileReader()
+                    reader.onload = (event) => {
+                      const src = event.target?.result as string
+                      if (!src) return
+                      const img = new Image()
+                      img.onload = () => {
+                        const maxDim = 500
+                        const ratio = Math.min(maxDim / img.width, maxDim / img.height, 1)
+                        addElement({
+                          id: `asset_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+                          type: 'image',
+                          x: 5000 - (img.width * ratio) / 2 + Math.random() * 100 - 50,
+                          y: 5000 - (img.height * ratio) / 2 + Math.random() * 100 - 50,
+                          width: img.width * ratio,
+                          height: img.height * ratio,
+                          rotation: 0,
+                          content: file.name,
+                          src,
+                          selected: false,
+                          locked: false,
+                          visible: true,
+                          opacity: 1,
+                        })
+                        toast.success(`${file.name} added to canvas`)
+                      }
+                      img.src = src
+                    }
+                    reader.readAsDataURL(file)
+                  })
+                  e.target.value = ''
+                }}
+              />
+            </label>
+            {/* List image elements */}
+            {elements.filter(e => e.type === 'image').length === 0 ? (
+              <div className="text-center py-6">
+                <FolderOpen className="w-8 h-8 text-slate-600 mx-auto mb-2" />
+                <p className="text-xs text-slate-500">No images yet</p>
+                <p className="text-xs text-slate-600 mt-1">Upload or drag & drop images, or generate with AI</p>
+              </div>
+            ) : (
+              <div className="space-y-1.5">
+                {elements.filter(e => e.type === 'image').map((element) => (
+                  <div
+                    key={element.id}
+                    onClick={() => selectElement(element.id)}
+                    className={cn(
+                      'flex items-center gap-2 p-1.5 rounded-lg cursor-pointer transition-colors group',
+                      selectedElementId === element.id
+                        ? 'bg-purple-500/10 border border-purple-500/20'
+                        : 'hover:bg-white/[0.03] border border-transparent'
+                    )}
+                  >
+                    {element.src && (
+                      <div className="w-8 h-8 rounded-md overflow-hidden border border-white/10 shrink-0">
+                        <img src={element.src} alt="" className="w-full h-full object-cover" />
+                      </div>
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <span className="text-[10px] text-slate-300 truncate block">
+                        {element.isEditableLayer ? element.layerName : element.content || 'Image'}
+                      </span>
+                      {element.isEditableLayer && (
+                        <span className="text-[9px] text-cyan-500/70">Editable layer</span>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+            {/* Hint */}
+            <div className="mt-4 p-2 rounded-lg bg-purple-500/5 border border-purple-500/10">
+              <p className="text-[10px] text-purple-300/70 leading-relaxed">
+                Tip: Select an image on canvas and click "Edit Elements" to decompose it into editable layers with AI
+              </p>
             </div>
           </div>
         )}
