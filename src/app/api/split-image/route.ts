@@ -19,6 +19,8 @@ interface LayerRequest {
 
 export const maxDuration = 120 // Allow up to 2 minutes for generating multiple layers
 
+export const dynamic = 'force-dynamic'
+
 export async function POST(request: NextRequest) {
   try {
     let body

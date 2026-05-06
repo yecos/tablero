@@ -144,3 +144,27 @@ Stage Summary:
 - APIs verified working with real images
 - Fallback mechanism ensures the feature works even when AI services are unavailable
 - Server stability is a dev-environment limitation; production build handles it better
+
+---
+Task ID: 1
+Agent: Main Agent
+Task: Fix 502 Bad Gateway error on /api/analyze-image
+
+Work Log:
+- Read all project files: analyze-image/route.ts, split-image/route.ts, canvas-area.tsx, image-split-panel.tsx, design-store.ts, next.config.ts, package.json
+- Identified root causes: (1) Large base64 image payloads causing server crashes/timeouts, (2) Client-side resize threshold too high (10MB), (3) PNG format producing huge payloads, (4) No server-side compression backup
+- Fixed image-split-panel.tsx: Changed to ALWAYS resize images to 512px max before sending (was only resizing if >10MB), switched from PNG to JPEG compression (0.8 quality) for ~10x smaller payloads
+- Fixed analyze-image/route.ts: Removed sharp import that caused crashes, simplified to rely on client-side compression, added better logging, added dynamic='force-dynamic' route config
+- Fixed split-image/route.ts: Added dynamic='force-dynamic' route config
+- Tested API with small image (84KB) - worked, VLM returned 3 elements
+- Tested API with medium image (231KB) - worked, VLM returned 6 elements
+- Tested API with larger image (274KB) - worked, VLM returned 7 elements
+- Tested split-image API - worked, generated background image
+- Rebuilt production bundle and verified server stability
+
+Stage Summary:
+- 502 error root cause: Large base64 image payloads + PNG format causing VLM API timeouts/server crashes
+- Fix: Client-side always compresses to 512px JPEG before sending to API
+- API routes simplified: Removed sharp dependency (was causing server crashes), rely on client-side compression
+- All API endpoints tested and working on production server
+- Server stays alive after multiple API requests

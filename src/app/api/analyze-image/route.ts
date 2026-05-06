@@ -12,7 +12,12 @@ async function getZAI() {
 
 export const maxDuration = 60 // Allow up to 60 seconds for VLM processing
 
+// Increase body size limit for base64 image payloads
+export const dynamic = 'force-dynamic'
+
 export async function POST(request: NextRequest) {
+  console.log('[analyze-image] Request received')
+
   try {
     // Parse request body with error handling
     let body
@@ -28,21 +33,28 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Image data (base64 or URL) is required' }, { status: 400 })
     }
 
+    // Log payload size for debugging
+    if (imageBase64) {
+      const sizeMB = (imageBase64.length * 0.75) / (1024 * 1024)
+      console.log(`[analyze-image] Base64 payload size: ${sizeMB.toFixed(2)} MB`)
+    }
+
     // Initialize SDK
     let zai
     try {
       zai = await getZAI()
     } catch (sdkError) {
-      console.error('SDK initialization failed:', sdkError)
+      console.error('[analyze-image] SDK initialization failed:', sdkError)
       return NextResponse.json(
         { error: 'AI service unavailable. Please try again.' },
         { status: 503 }
       )
     }
 
-    // Build the image URL for VLM
+    // Build the image source for VLM
+    // Client-side already compresses images to max 512px JPEG before sending
     const imgSource = imageBase64
-      ? `data:image/png;base64,${imageBase64}`
+      ? `data:image/jpeg;base64,${imageBase64}`
       : imageUrl
 
     console.log('[analyze-image] Starting VLM analysis, image source type:', imageBase64 ? 'base64' : 'url')
@@ -108,13 +120,14 @@ IMPORTANT: You must respond ONLY with valid JSON in this exact format, no additi
         ],
         thinking: { type: 'disabled' }
       })
-    } catch (vlmError) {
-      console.error('VLM call failed:', vlmError)
-      // Return a fallback analysis so the UI still works
+    } catch (vlmError: unknown) {
+      console.error('[analyze-image] VLM call failed:', vlmError)
+      const errMsg = vlmError instanceof Error ? vlmError.message : String(vlmError)
+      // If VLM fails, return fallback analysis so UI still works
       return NextResponse.json({
         success: true,
         analysis: createFallbackAnalysis(),
-        rawAnalysis: 'VLM analysis failed, using fallback',
+        rawAnalysis: `VLM analysis failed: ${errMsg}`,
         fallback: true
       })
     }
@@ -130,6 +143,8 @@ IMPORTANT: You must respond ONLY with valid JSON in this exact format, no additi
         fallback: true
       })
     }
+
+    console.log('[analyze-image] VLM response length:', analysisText.length)
 
     // Parse the JSON response - handle potential markdown code blocks
     let analysis

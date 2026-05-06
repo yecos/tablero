@@ -68,15 +68,14 @@ export function ImageSplitPanel() {
       let imageUrl: string | null = null
 
       if (originalImage.src.startsWith('data:')) {
-        imageBase64 = originalImage.src.split(',')[1]
-        // Resize if too large (>10MB base64)
-        if (imageBase64.length > 10 * 1024 * 1024) {
-          try {
-            const resized = await resizeBase64Image(originalImage.src, 1024)
-            imageBase64 = resized.split(',')[1]
-          } catch {
-            console.warn('Image resize failed, using original')
-          }
+        // ALWAYS resize the image to max 512px to avoid 502 errors
+        // Even small-looking images can produce huge base64 strings
+        try {
+          const resized = await resizeBase64Image(originalImage.src, 512)
+          imageBase64 = resized.split(',')[1]
+        } catch {
+          console.warn('Image resize failed, using original')
+          imageBase64 = originalImage.src.split(',')[1]
         }
       } else {
         imageUrl = originalImage.src
@@ -614,7 +613,7 @@ export function ImageSplitPanel() {
   )
 }
 
-// Utility: Resize a base64 image
+// Utility: Resize a base64 image (uses JPEG for much smaller payloads)
 async function resizeBase64Image(dataUrl: string, maxDim: number): Promise<string> {
   return new Promise((resolve, reject) => {
     const img = new Image()
@@ -628,7 +627,8 @@ async function resizeBase64Image(dataUrl: string, maxDim: number): Promise<strin
       const ctx = canvas.getContext('2d')
       if (!ctx) { reject(new Error('No canvas context')); return }
       ctx.drawImage(img, 0, 0, w, h)
-      resolve(canvas.toDataURL('image/png'))
+      // Use JPEG with 0.8 quality for ~10x smaller payload than PNG
+      resolve(canvas.toDataURL('image/jpeg', 0.8))
     }
     img.onerror = () => reject(new Error('Image load failed'))
     img.src = dataUrl
