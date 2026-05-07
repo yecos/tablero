@@ -403,6 +403,97 @@ export async function executeNode(
         break
       }
 
+      case 'remove-bg': {
+        const imageInput = inputs['input_0_image']
+        const imageValue =
+          imageInput?.dataType === 'image' ? String(imageInput.value) : ''
+
+        if (!imageValue) {
+          throw new Error('No image input provided for background removal')
+        }
+
+        const res = await fetch('/api/remove-bg', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ imageBase64: imageValue }),
+        })
+
+        if (!res.ok) {
+          const err = await res.text()
+          throw new Error(err || `Remove BG API error ${res.status}`)
+        }
+
+        const data = await res.json()
+        const resultImage = data.imageUrl ?? data.imageBase64 ?? ''
+        outputs = {
+          output_1_image: { dataType: 'image', value: resultImage },
+        }
+        break
+      }
+
+      case 'style-transfer': {
+        const imageInput = inputs['input_0_image']
+        const imageValue =
+          imageInput?.dataType === 'image' ? String(imageInput.value) : ''
+        const styleInput = inputs['input_1_text']
+        const stylePrompt = styleInput?.dataType === 'text'
+          ? String(styleInput.value)
+          : (node.data.stylePrompt as string) || ''
+
+        if (!imageValue) {
+          throw new Error('No image input provided for style transfer')
+        }
+        if (!stylePrompt) {
+          throw new Error('No style prompt provided for style transfer')
+        }
+
+        const res = await fetch('/api/style-transfer', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ imageBase64: imageValue, stylePrompt }),
+        })
+
+        if (!res.ok) {
+          const err = await res.text()
+          throw new Error(err || `Style Transfer API error ${res.status}`)
+        }
+
+        const data = await res.json()
+        const resultImage = data.imageUrl ?? data.image ?? ''
+        outputs = {
+          output_2_image: { dataType: 'image', value: resultImage },
+        }
+        break
+      }
+
+      case 'svg-vectorize': {
+        const imageInput = inputs['input_0_image']
+        const imageValue =
+          imageInput?.dataType === 'image' ? String(imageInput.value) : ''
+
+        if (!imageValue) {
+          throw new Error('No image input provided for vectorization')
+        }
+
+        const res = await fetch('/api/vectorize', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ imageBase64: imageValue }),
+        })
+
+        if (!res.ok) {
+          const err = await res.text()
+          throw new Error(err || `Vectorize API error ${res.status}`)
+        }
+
+        const data = await res.json()
+        const svgText = data.svg ?? ''
+        outputs = {
+          output_1_text: { dataType: 'text', value: svgText },
+        }
+        break
+      }
+
       // ── Transform Nodes ───────────────────────────────────
       case 'image-transform': {
         const imageInput = inputs['input_0_image']

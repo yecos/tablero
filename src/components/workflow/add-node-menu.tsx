@@ -19,6 +19,9 @@ import {
   Merge,
   StickyNote,
   Download,
+  Scissors,
+  Paintbrush,
+  PenTool,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -102,6 +105,24 @@ const NODE_CATEGORIES: NodeCategory[] = [
         icon: Palette,
         label: 'Brand Kit',
         description: 'Generate brand assets',
+      },
+      {
+        type: 'remove-bg',
+        icon: Scissors,
+        label: 'Remove BG',
+        description: 'Remove image background',
+      },
+      {
+        type: 'style-transfer',
+        icon: Paintbrush,
+        label: 'Style Transfer',
+        description: 'Apply artistic style',
+      },
+      {
+        type: 'svg-vectorize',
+        icon: PenTool,
+        label: 'SVG Vectorize',
+        description: 'Convert raster to SVG',
       },
     ],
   },

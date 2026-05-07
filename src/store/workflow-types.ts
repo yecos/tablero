@@ -15,6 +15,9 @@ export type WorkflowNodeType =
   | 'image-edit'       // Edit/decompose image layers
   | '3d-gen'           // Image to 3D conversion
   | 'brand-kit'        // Brand kit generation
+  | 'remove-bg'        // Remove image background
+  | 'style-transfer'   // Apply artistic style to image
+  | 'svg-vectorize'    // Convert raster image to SVG
   | 'output'           // Preview/display node
   | 'text-input'       // Manual text input
   | 'image-input'      // Manual image upload
@@ -151,6 +154,18 @@ export interface NoteNodeData {
 export interface ExportNodeData {
   format: 'png' | 'txt' | 'json' | 'svg'
   fileName: string
+}
+
+export interface RemoveBgNodeData {
+  // Takes image input, outputs image with transparent background
+}
+
+export interface StyleTransferNodeData {
+  stylePrompt: string
+}
+
+export interface SvgVectorizeNodeData {
+  // Takes image input, outputs SVG text
 }
 
 // ---- Type Compatibility ----
@@ -320,6 +335,48 @@ export const NODE_DEFAULTS: Record<WorkflowNodeType, {
       prompt: '',
       industry: '',
     },
+  },
+  'remove-bg': {
+    title: 'Remove BG',
+    width: 280,
+    height: 260,
+    color: '#ef4444', // red
+    icon: 'scissors',
+    category: 'ai',
+    ports: [
+      { name: 'Image', dataType: 'image', direction: 'input' },
+      { name: 'Image', dataType: 'image', direction: 'output' },
+    ],
+    defaultData: {},
+  },
+  'style-transfer': {
+    title: 'Style Transfer',
+    width: 280,
+    height: 300,
+    color: '#a855f7', // purple
+    icon: 'palette',
+    category: 'ai',
+    ports: [
+      { name: 'Image', dataType: 'image', direction: 'input' },
+      { name: 'Style', dataType: 'text', direction: 'input' },
+      { name: 'Image', dataType: 'image', direction: 'output' },
+    ],
+    defaultData: {
+      stylePrompt: '',
+    },
+  },
+  'svg-vectorize': {
+    title: 'SVG Vectorize',
+    width: 280,
+    height: 260,
+    color: '#22c55e', // green
+    icon: 'pen-tool',
+    category: 'ai',
+    ports: [
+      { name: 'Image', dataType: 'image', direction: 'input' },
+      { name: 'SVG', dataType: 'text', direction: 'output' },
+    ],
+    defaultData: {},
   },
 
   // ── Transform Nodes ──────────────────────────────────────────

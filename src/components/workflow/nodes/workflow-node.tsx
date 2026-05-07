@@ -12,6 +12,9 @@ import { ImageGenNode } from './image-gen-node'
 import { ImageEditNode } from './image-edit-node'
 import { ThreedGenNode } from './threed-gen-node'
 import { BrandKitNode } from './brand-kit-node'
+import { RemoveBgNode } from './remove-bg-node'
+import { StyleTransferNode } from './style-transfer-node'
+import { SvgVectorizeNode } from './svg-vectorize-node'
 import { OutputNode } from './output-node'
 import { TextInputNode } from './text-input-node'
 import { ImageInputNode } from './image-input-node'
@@ -44,6 +47,9 @@ import {
   Merge,
   StickyNote,
   Download,
+  Scissors,
+  Paintbrush,
+  PenTool,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 
@@ -66,6 +72,9 @@ const NODE_ICONS: Record<WNodeType, LucideIcon> = {
   'image-edit': Pencil,
   '3d-gen': Box,
   'brand-kit': Palette,
+  'remove-bg': Scissors,
+  'style-transfer': Paintbrush,
+  'svg-vectorize': PenTool,
   'output': Eye,
   'text-input': Type,
   'image-input': Upload,
@@ -196,6 +205,12 @@ function NodeContent({
       return <ThreedGenNode node={node} onDataChange={onDataChange} />
     case 'brand-kit':
       return <BrandKitNode node={node} onDataChange={onDataChange} />
+    case 'remove-bg':
+      return <RemoveBgNode node={node} isSelected={false} onUpdate={onDataChange} />
+    case 'style-transfer':
+      return <StyleTransferNode node={node} isSelected={false} onUpdate={onDataChange} />
+    case 'svg-vectorize':
+      return <SvgVectorizeNode node={node} isSelected={false} onUpdate={onDataChange} />
     case 'output':
       return <OutputNode node={node} onDataChange={onDataChange} />
     case 'text-input':

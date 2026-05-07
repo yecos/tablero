@@ -18,6 +18,9 @@ import { ImageGenNode } from './nodes/image-gen-node'
 import { ImageEditNode } from './nodes/image-edit-node'
 import { ThreedGenNode } from './nodes/threed-gen-node'
 import { BrandKitNode } from './nodes/brand-kit-node'
+import { RemoveBgNode } from './nodes/remove-bg-node'
+import { StyleTransferNode } from './nodes/style-transfer-node'
+import { SvgVectorizeNode } from './nodes/svg-vectorize-node'
 import { TextInputNode } from './nodes/text-input-node'
 import { ImageInputNode } from './nodes/image-input-node'
 import { ColorPickerNode } from './nodes/color-picker-node'
@@ -59,6 +62,9 @@ import {
   Download,
   Save,
   FolderOpen,
+  Scissors,
+  Paintbrush,
+  PenTool,
 } from 'lucide-react'
 
 // ---------------------------------------------------------------------------
@@ -131,6 +137,12 @@ function getNodeIcon(type: WorkflowNodeType) {
       return <Box size={12} />
     case 'brand-kit':
       return <Palette size={12} />
+    case 'remove-bg':
+      return <Scissors size={12} />
+    case 'style-transfer':
+      return <Paintbrush size={12} />
+    case 'svg-vectorize':
+      return <PenTool size={12} />
     case 'output':
       return <Monitor size={12} />
     case 'text-input':
@@ -210,6 +222,12 @@ function WorkflowNodeComponent({
         return <ThreedGenNode node={node} onDataChange={onDataChange} />
       case 'brand-kit':
         return <BrandKitNode node={node} onDataChange={onDataChange} />
+      case 'remove-bg':
+        return <RemoveBgNode node={node} isSelected={false} onUpdate={onDataChange} />
+      case 'style-transfer':
+        return <StyleTransferNode node={node} isSelected={false} onUpdate={onDataChange} />
+      case 'svg-vectorize':
+        return <SvgVectorizeNode node={node} isSelected={false} onUpdate={onDataChange} />
       case 'output':
         return <OutputNodeContent node={node} onDataChange={onDataChange} />
       case 'text-input':

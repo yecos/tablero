@@ -1,4 +1,5 @@
 import ZAI from 'z-ai-web-dev-sdk'
+import { generateImage as providerGenerateImage } from './ai-providers'
 
 let zaiInstance: Awaited<ReturnType<typeof ZAI.create>> | null = null
 
@@ -25,30 +26,17 @@ export interface ImageGenerationResult {
 }
 
 export async function generateImage(options: ImageGenerationOptions): Promise<ImageGenerationResult> {
-  const zai = await getAIClient()
-
-  const validSizes = ['1024x1024', '1344x768', '768x1344', '864x1152', '1152x864', '1440x720', '720x1440'] as const
-  const imageSize = validSizes.includes(options.size || '' as typeof validSizes[number]) ? options.size! : '1024x1024' as const
-
-  const enhancedPrompt = options.style
-    ? `${options.prompt}, ${options.style} style`
-    : options.prompt
-
-  const response = await zai.images.generations.create({
-    prompt: enhancedPrompt,
-    size: imageSize,
+  // Use the provider system with automatic fallback
+  const result = await providerGenerateImage(options.prompt, {
+    size: options.size,
+    negativePrompt: options.negativePrompt,
+    style: options.style,
   })
 
-  if (!response.data || response.data.length === 0) {
-    throw new Error('No se generó ninguna imagen. Intenta con un prompt diferente.')
-  }
-
-  const imageData = response.data[0] as { base64?: string; url?: string; b64_json?: string }
-
   return {
-    imageUrl: imageData.url || null,
-    base64: imageData.b64_json || imageData.base64 || null,
+    imageUrl: result.isBase64 ? null : result.url,
+    base64: result.isBase64 ? result.url.replace(/^data:image\/\w+;base64,/, '') : null,
     prompt: options.prompt,
-    size: imageSize,
+    size: options.size || '1024x1024',
   }
 }
