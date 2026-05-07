@@ -10,6 +10,8 @@ export interface WorkflowPort {
 }
 
 export type WorkflowNodeType =
+  | 'text-input'     // Manual text entry source
+  | 'image-input'    // Manual image upload/URL source
   | 'text-ai'        // AI text generation / prompt
   | 'image-gen'      // AI image generation from prompt
   | 'image-edit'     // Edit/decompose image layers
@@ -59,6 +61,15 @@ export interface Workflow {
 
 // ---- Node Type Definitions ----
 
+export interface TextInputNodeData {
+  text: string
+}
+
+export interface ImageInputNodeData {
+  imageUrl: string
+  imageBase64: string
+}
+
 export interface TextAINodeData {
   prompt: string
   systemPrompt: string
@@ -102,6 +113,33 @@ export const NODE_DEFAULTS: Record<WorkflowNodeType, {
   ports: Omit<WorkflowPort, 'id'>[]
   defaultData: Record<string, unknown>
 }> = {
+  'text-input': {
+    title: 'Texto',
+    width: 280,
+    height: 200,
+    color: '#a78bfa', // light purple
+    icon: 'text-input',
+    ports: [
+      { name: 'Texto', dataType: 'text', direction: 'output' },
+    ],
+    defaultData: {
+      text: '',
+    },
+  },
+  'image-input': {
+    title: 'Imagen',
+    width: 280,
+    height: 280,
+    color: '#f472b6', // light pink
+    icon: 'image-input',
+    ports: [
+      { name: 'Imagen', dataType: 'image', direction: 'output' },
+    ],
+    defaultData: {
+      imageUrl: '',
+      imageBase64: '',
+    },
+  },
   'text-ai': {
     title: 'AI Text',
     width: 280,

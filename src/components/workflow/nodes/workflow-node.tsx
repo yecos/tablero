@@ -13,6 +13,8 @@ import { ImageEditNode } from './image-edit-node'
 import { ThreedGenNode } from './threed-gen-node'
 import { BrandKitNode } from './brand-kit-node'
 import { OutputNode } from './output-node'
+import { TextInputNode } from './text-input-node'
+import { ImageInputNode } from './image-input-node'
 import {
   FileText,
   ImageIcon,
@@ -24,6 +26,7 @@ import {
   Play,
   Loader2,
   AlertCircle,
+  Upload,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 
@@ -39,6 +42,8 @@ const PORT_COLORS: Record<PortDataType, string> = {
 
 // --- Node icon map ---
 const NODE_ICONS: Record<WNodeType, LucideIcon> = {
+  'text-input': FileText,
+  'image-input': Upload,
   'text-ai': FileText,
   'image-gen': ImageIcon,
   'image-edit': Pencil,
@@ -154,6 +159,10 @@ function NodeContent({
   onDataChange: (nodeId: string, data: Record<string, unknown>) => void
 }) {
   switch (node.type) {
+    case 'text-input':
+      return <TextInputNode node={node} onDataChange={onDataChange} />
+    case 'image-input':
+      return <ImageInputNode node={node} onDataChange={onDataChange} />
     case 'text-ai':
       return <TextAINode node={node} onDataChange={onDataChange} />
     case 'image-gen':

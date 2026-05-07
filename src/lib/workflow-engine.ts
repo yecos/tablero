@@ -108,6 +108,32 @@ export async function executeNode(
     let outputs: Record<string, PortDataValue> = {}
 
     switch (node.type) {
+      case 'text-input': {
+        // Simple pass-through: take the user's text and output it
+        const text = (node.data.text as string) || ''
+        if (!text.trim()) {
+          throw new Error('No se ha ingresado texto')
+        }
+        outputs = {
+          output_1_text: { dataType: 'text', value: text },
+        }
+        break
+      }
+
+      case 'image-input': {
+        // Pass-through: take the user's image URL or base64 and output it
+        const imageUrl = (node.data.imageUrl as string) || ''
+        const imageBase64 = (node.data.imageBase64 as string) || ''
+        const imageValue = imageBase64 || imageUrl
+        if (!imageValue) {
+          throw new Error('No se ha ingresado ninguna imagen')
+        }
+        outputs = {
+          output_1_image: { dataType: 'image', value: imageValue },
+        }
+        break
+      }
+
       case 'text-ai': {
         const contextValue = inputs['input_0_text']
         const contextText =

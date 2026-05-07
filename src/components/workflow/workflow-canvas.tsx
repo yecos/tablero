@@ -12,6 +12,8 @@ import { useWorkflowStore } from '@/store/workflow-store'
 import { executeWorkflow, executeSingleNode } from '@/lib/workflow-engine'
 import { WorkflowConnections, getPortPosition } from './workflow-connections'
 import { AddNodeMenu } from './add-node-menu'
+import { TextInputNode } from './nodes/text-input-node'
+import { ImageInputNode } from './nodes/image-input-node'
 import { TextAINode } from './nodes/text-ai-node'
 import { ImageGenNode } from './nodes/image-gen-node'
 import { ImageEditNode } from './nodes/image-edit-node'
@@ -34,6 +36,8 @@ import {
   Pencil,
   Box,
   Palette,
+  FileText,
+  Upload,
   ZoomIn,
   ZoomOut,
   Maximize,
@@ -105,6 +109,10 @@ function OutputNodeContent({
 // ---------------------------------------------------------------------------
 function getNodeIcon(type: WorkflowNodeType) {
   switch (type) {
+    case 'text-input':
+      return <FileText size={12} />
+    case 'image-input':
+      return <Upload size={12} />
     case 'text-ai':
       return <Type size={12} />
     case 'image-gen':
@@ -163,6 +171,10 @@ function WorkflowNodeComponent({
 
   const renderNodeContent = () => {
     switch (node.type) {
+      case 'text-input':
+        return <TextInputNode node={node} onDataChange={onDataChange} />
+      case 'image-input':
+        return <ImageInputNode node={node} onDataChange={onDataChange} />
       case 'text-ai':
         return <TextAINode node={node} onDataChange={onDataChange} />
       case 'image-gen':
