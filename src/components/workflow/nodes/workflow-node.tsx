@@ -206,11 +206,11 @@ function NodeContent({
     case 'brand-kit':
       return <BrandKitNode node={node} onDataChange={onDataChange} />
     case 'remove-bg':
-      return <RemoveBgNode node={node} isSelected={false} onUpdate={onDataChange} />
+      return <RemoveBgNode node={node} onDataChange={onDataChange} />
     case 'style-transfer':
-      return <StyleTransferNode node={node} isSelected={false} onUpdate={onDataChange} />
+      return <StyleTransferNode node={node} onDataChange={onDataChange} />
     case 'svg-vectorize':
-      return <SvgVectorizeNode node={node} isSelected={false} onUpdate={onDataChange} />
+      return <SvgVectorizeNode node={node} onDataChange={onDataChange} />
     case 'output':
       return <OutputNode node={node} onDataChange={onDataChange} />
     case 'text-input':

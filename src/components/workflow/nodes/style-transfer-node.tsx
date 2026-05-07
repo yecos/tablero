@@ -6,11 +6,10 @@ import type { WorkflowNode } from '@/store/workflow-types'
 
 interface StyleTransferNodeProps {
   node: WorkflowNode
-  isSelected: boolean
-  onUpdate: (id: string, data: Record<string, unknown>) => void
+  onDataChange: (id: string, data: Record<string, unknown>) => void
 }
 
-export function StyleTransferNode({ node, isSelected: _isSelected, onUpdate }: StyleTransferNodeProps) {
+export function StyleTransferNode({ node, onDataChange }: StyleTransferNodeProps) {
   const stylePrompt = (node.data.stylePrompt as string) || ''
 
   return (
@@ -24,7 +23,7 @@ export function StyleTransferNode({ node, isSelected: _isSelected, onUpdate }: S
         <input
           type="text"
           value={stylePrompt}
-          onChange={(e) => onUpdate(node.id, { ...node.data, stylePrompt: e.target.value })}
+          onChange={(e) => onDataChange(node.id, { stylePrompt: e.target.value })}
           placeholder="e.g. Van Gogh, watercolor, cyberpunk..."
           className="w-full rounded border border-white/10 bg-black/30 px-2 py-1 text-[11px] text-white/80 placeholder:text-white/25 focus:border-purple-500/50 focus:outline-none"
         />

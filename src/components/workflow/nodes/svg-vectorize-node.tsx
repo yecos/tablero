@@ -6,11 +6,10 @@ import type { WorkflowNode } from '@/store/workflow-types'
 
 interface SvgVectorizeNodeProps {
   node: WorkflowNode
-  isSelected: boolean
-  onUpdate: (id: string, data: Record<string, unknown>) => void
+  onDataChange: (id: string, data: Record<string, unknown>) => void
 }
 
-export function SvgVectorizeNode({ node, isSelected: _isSelected, onUpdate: _onUpdate }: SvgVectorizeNodeProps) {
+export function SvgVectorizeNode({ node }: SvgVectorizeNodeProps) {
   return (
     <div className="flex flex-col gap-2 p-3">
       <div className="flex items-center gap-2">

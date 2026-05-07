@@ -424,7 +424,13 @@ export async function executeNode(
         }
 
         const data = await res.json()
-        const resultImage = data.imageUrl ?? data.imageBase64 ?? ''
+        // imageUrl has data: prefix, imageBase64 does not — prefer imageUrl
+        let resultImage = data.imageUrl ?? ''
+        if (!resultImage && data.imageBase64) {
+          resultImage = data.imageBase64.startsWith('data:')
+            ? data.imageBase64
+            : `data:image/png;base64,${data.imageBase64}`
+        }
         outputs = {
           output_1_image: { dataType: 'image', value: resultImage },
         }
@@ -459,7 +465,13 @@ export async function executeNode(
         }
 
         const data = await res.json()
-        const resultImage = data.imageUrl ?? data.image ?? ''
+        // imageUrl/image may have data: prefix or be a URL — normalize
+        let resultImage = data.imageUrl ?? data.image ?? ''
+        if (!resultImage && data.imageBase64) {
+          resultImage = data.imageBase64.startsWith('data:')
+            ? data.imageBase64
+            : `data:image/png;base64,${data.imageBase64}`
+        }
         outputs = {
           output_2_image: { dataType: 'image', value: resultImage },
         }

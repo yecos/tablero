@@ -264,7 +264,7 @@ export const NODE_DEFAULTS: Record<WorkflowNodeType, {
     category: 'ai',
     ports: [
       { name: 'Context', dataType: 'text', direction: 'input' },
-      { name: 'Prompt', dataType: 'text', direction: 'output' },
+      { name: 'Text', dataType: 'text', direction: 'output' },
     ],
     defaultData: {
       prompt: '',

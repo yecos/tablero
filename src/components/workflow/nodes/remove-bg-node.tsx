@@ -6,11 +6,10 @@ import type { WorkflowNode } from '@/store/workflow-types'
 
 interface RemoveBgNodeProps {
   node: WorkflowNode
-  isSelected: boolean
-  onUpdate: (id: string, data: Record<string, unknown>) => void
+  onDataChange: (id: string, data: Record<string, unknown>) => void
 }
 
-export function RemoveBgNode({ node, isSelected, onUpdate: _onUpdate }: RemoveBgNodeProps) {
+export function RemoveBgNode({ node }: RemoveBgNodeProps) {
   return (
     <div className="flex flex-col gap-2 p-3">
       <div className="flex items-center gap-2">
