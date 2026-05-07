@@ -14,7 +14,8 @@ export async function GET(
     if (!space) return NextResponse.json({ error: 'Space not found' }, { status: 404 });
     return NextResponse.json(space);
   } catch (error) {
-    return NextResponse.json({ error: 'Failed to fetch space' }, { status: 500 });
+    console.error('[spaces/id] GET error:', error);
+    return NextResponse.json({ error: 'Database error' }, { status: 500 });
   }
 }
 
@@ -31,6 +32,7 @@ export async function PATCH(
     });
     return NextResponse.json(space);
   } catch (error) {
+    console.error('[spaces/id] PATCH error:', error);
     return NextResponse.json({ error: 'Failed to update space' }, { status: 500 });
   }
 }
@@ -44,6 +46,7 @@ export async function DELETE(
     await prisma.space.delete({ where: { id } });
     return NextResponse.json({ success: true });
   } catch (error) {
+    console.error('[spaces/id] DELETE error:', error);
     return NextResponse.json({ error: 'Failed to delete space' }, { status: 500 });
   }
 }
