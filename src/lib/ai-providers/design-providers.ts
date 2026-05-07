@@ -105,6 +105,10 @@ export const removeBgProviders: RemoveBgProvider[] = [
 // ═══════════════════════════════════════════════════════════════════════════════
 // STYLE TRANSFER
 // ═══════════════════════════════════════════════════════════════════════════════
+// NOTE: Only fal.ai (falStyleTransferProvider) actually uses the input image.
+// The HuggingFace and Pollinations providers ignore the input image and perform
+// text-to-image generation using only the style prompt. True style transfer for
+// those providers would require dedicated image-to-image APIs.
 
 // ── HuggingFace Style Transfer ──────────────────────────────────────────────
 

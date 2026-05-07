@@ -124,7 +124,7 @@ export const createImageSplitSlice: StateCreator<DesignState, [], [], ImageSplit
       })
 
       // Push to history
-      const snapshot = newElements.map(e => ({ ...e }))
+      const snapshot = { elements: newElements.map(e => ({ ...e })), layers: newLayersState.map(l => ({ ...l })) }
       const newHistory = state.history.slice(0, state.historyIndex + 1)
       newHistory.push(snapshot)
       if (newHistory.length > MAX_HISTORY) newHistory.shift()

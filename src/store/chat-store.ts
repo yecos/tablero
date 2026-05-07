@@ -12,17 +12,22 @@ export interface ChatMessage {
 export interface ChatState {
   messages: ChatMessage[]
   isGenerating: boolean
+  generatingOperations: Set<string>
 
   addMessage: (message: Omit<ChatMessage, 'id' | 'timestamp'>) => string
   updateMessage: (id: string, updates: Partial<ChatMessage>) => void
   removeMessage: (id: string) => void
   clearMessages: () => void
   setIsGenerating: (generating: boolean) => void
+  startOperation: (operationId: string) => void
+  endOperation: (operationId: string) => void
+  isOperationRunning: (operationId?: string) => boolean
 }
 
-export const useChatStore = create<ChatState>((set) => ({
+export const useChatStore = create<ChatState>((set, get) => ({
   messages: [],
   isGenerating: false,
+  generatingOperations: new Set<string>(),
 
   addMessage: (message) => {
     const id = `msg_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`
@@ -46,5 +51,24 @@ export const useChatStore = create<ChatState>((set) => ({
     })),
 
   clearMessages: () => set({ messages: [] }),
+  
   setIsGenerating: (generating) => set({ isGenerating: generating }),
+
+  startOperation: (operationId) => {
+    const ops = new Set(get().generatingOperations)
+    ops.add(operationId)
+    set({ generatingOperations: ops, isGenerating: true })
+  },
+
+  endOperation: (operationId) => {
+    const ops = new Set(get().generatingOperations)
+    ops.delete(operationId)
+    set({ generatingOperations: ops, isGenerating: ops.size > 0 })
+  },
+
+  isOperationRunning: (operationId) => {
+    const ops = get().generatingOperations
+    if (operationId) return ops.has(operationId)
+    return ops.size > 0
+  },
 }))

@@ -17,7 +17,7 @@ interface ChatSidebarProps {
 }
 
 export function ChatSidebar({ onClose }: ChatSidebarProps) {
-  const { messages, isGenerating, addMessage, updateMessage, setIsGenerating } = useChatStore()
+  const { messages, isGenerating, addMessage, updateMessage, setIsGenerating, startOperation, endOperation, isOperationRunning } = useChatStore()
   const { addElement, setLeftPanelTab, setLeftPanelOpen, setBrandKit } = useDesignStore()
   const [input, setInput] = useState('')
   const [isSending, setIsSending] = useState(false)
@@ -40,7 +40,7 @@ export function ChatSidebar({ onClose }: ChatSidebarProps) {
 
   const sendMessage = async (messageText?: string) => {
     const text = messageText || input.trim()
-    if (!text || isSending || isGenerating) return
+    if (!text || isSending) return
 
     setInput('')
     setIsSending(true)
@@ -50,7 +50,7 @@ export function ChatSidebar({ onClose }: ChatSidebarProps) {
 
     // Add loading AI message
     const aiMsgId = addMessage({ role: 'assistant', content: '', isLoading: true })
-    setIsGenerating(true)
+    startOperation('chat')
 
     try {
       // Build history for context
@@ -76,15 +76,13 @@ export function ChatSidebar({ onClose }: ChatSidebarProps) {
       })
       toast.error('Failed to get AI response')
     } finally {
-      setIsGenerating(false)
+      endOperation('chat')
       setIsSending(false)
     }
   }
 
   const generateImage = async (prompt: string) => {
-    if (isGenerating) return
-
-    setIsGenerating(true)
+    startOperation('image-gen')
     addMessage({ role: 'user', content: `Generate image: ${prompt}` })
     const aiMsgId = addMessage({ role: 'assistant', content: 'Generating your image... ✨', isLoading: true })
     toast.loading('Generating image...', { id: 'gen-image' })
@@ -139,14 +137,12 @@ export function ChatSidebar({ onClose }: ChatSidebarProps) {
       })
       toast.error('Failed to generate image', { id: 'gen-image' })
     } finally {
-      setIsGenerating(false)
+      endOperation('image-gen')
     }
   }
 
   const generateBrandKit = async (description: string) => {
-    if (isGenerating) return
-
-    setIsGenerating(true)
+    startOperation('brand-kit')
     addMessage({ role: 'user', content: `Generate brand kit for: ${description}` })
     const aiMsgId = addMessage({ role: 'assistant', content: 'Creating your brand kit... 🎨', isLoading: true })
     toast.loading('Generating brand kit...', { id: 'gen-brandkit' })
@@ -217,7 +213,7 @@ ${Object.entries(kit.colors || {}).map(([key, val]) => `• ${key}: \`${val}\``)
       })
       toast.error('Failed to generate brand kit', { id: 'gen-brandkit' })
     } finally {
-      setIsGenerating(false)
+      endOperation('brand-kit')
     }
   }
 
@@ -372,16 +368,16 @@ ${Object.entries(kit.colors || {}).map(([key, val]) => `• ${key}: \`${val}\``)
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder="Describe your design..."
-            disabled={isSending || isGenerating}
+            disabled={isSending || isOperationRunning('chat')}
             className="bg-[#1a1a2e] border-white/5 text-white text-xs placeholder:text-slate-600 focus:border-purple-500/30 focus:ring-purple-500/20"
           />
           <Button
             size="icon"
             onClick={() => sendMessage()}
-            disabled={!input.trim() || isSending || isGenerating}
+            disabled={!input.trim() || isSending || isOperationRunning('chat')}
             className="h-9 w-9 bg-gradient-to-r from-purple-600 to-cyan-500 hover:from-purple-500 hover:to-cyan-400 text-white border-0 shrink-0"
           >
-            {isSending || isGenerating ? (
+            {isSending || isOperationRunning('chat') ? (
               <Loader2 className="w-4 h-4 animate-spin" />
             ) : (
               <Send className="w-4 h-4" />

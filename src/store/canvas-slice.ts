@@ -55,7 +55,7 @@ export const createCanvasSlice: StateCreator<DesignState, [], [], CanvasSlice> =
       )
       const newElements = [...state.elements, element]
       // Push to history
-      const snapshot = newElements.map(e => ({ ...e }))
+      const snapshot = { elements: newElements.map(e => ({ ...e })), layers: state.layers.map(l => ({ ...l })) }
       const newHistory = state.history.slice(0, state.historyIndex + 1)
       newHistory.push(snapshot)
       if (newHistory.length > MAX_HISTORY) newHistory.shift()
@@ -73,7 +73,7 @@ export const createCanvasSlice: StateCreator<DesignState, [], [], CanvasSlice> =
   removeElement: (id) =>
     set((state) => {
       const newElements = state.elements.filter((e) => e.id !== id)
-      const snapshot = newElements.map(e => ({ ...e }))
+      const snapshot = { elements: newElements.map(e => ({ ...e })), layers: state.layers.map(l => ({ ...l })) }
       const newHistory = state.history.slice(0, state.historyIndex + 1)
       newHistory.push(snapshot)
       if (newHistory.length > MAX_HISTORY) newHistory.shift()
@@ -98,7 +98,7 @@ export const createCanvasSlice: StateCreator<DesignState, [], [], CanvasSlice> =
       // Push to history for significant updates (not selection changes)
       const isSignificant = Object.keys(updates).some(k => k !== 'selected')
       if (isSignificant) {
-        const snapshot = newElements.map(e => ({ ...e }))
+        const snapshot = { elements: newElements.map(e => ({ ...e })), layers: state.layers.map(l => ({ ...l })) }
         const newHistory = state.history.slice(0, state.historyIndex + 1)
         newHistory.push(snapshot)
         if (newHistory.length > MAX_HISTORY) newHistory.shift()

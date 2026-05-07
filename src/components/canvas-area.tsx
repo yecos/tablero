@@ -15,7 +15,7 @@ export function CanvasArea() {
   const {
     elements, zoom, panX, panY, setPan, setZoom, selectedElementId, selectElement,
     updateElement, activeTool, addElement, setCenteredPan, edges, addEdge,
-    setConnectingFrom, connectingFrom, setIsGenerating3D, removeEdge, setImageSplit
+    setConnectingFrom, connectingFrom, startGenerating3D, endGenerating3D, removeEdge, setImageSplit
   } = useDesignStore()
 
   const canvasRef = useRef<HTMLDivElement>(null)
@@ -45,7 +45,8 @@ export function CanvasArea() {
     updateElement,
     addElement,
     addEdge,
-    setIsGenerating3D,
+    startGenerating3D,
+    endGenerating3D,
   })
 
   // Connections hook

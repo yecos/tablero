@@ -200,7 +200,7 @@ export async function executeNode(
   const inputs = getNodeInputs(nodeId, store)
 
   store.setNodeStatus(nodeId, 'running')
-  store.setExecutingNodeId(nodeId)
+  store.addExecutingNode(nodeId)
 
   try {
     let outputs: Record<string, PortDataValue> = {}
@@ -689,9 +689,7 @@ export async function executeNode(
     currentStore.setNodeStatus(nodeId, 'error', message)
   } finally {
     const currentStore = useWorkflowStore.getState()
-    if (currentStore.executingNodeId === nodeId) {
-      currentStore.setExecutingNodeId(null)
-    }
+    currentStore.removeExecutingNode(nodeId)
   }
 }
 
@@ -731,7 +729,10 @@ export async function executeWorkflow(
   } finally {
     const currentStore = useWorkflowStore.getState()
     currentStore.setIsExecuting(false)
-    currentStore.setExecutingNodeId(null)
+    // Safety: clear any remaining executing nodes
+    for (const nodeId of currentStore.executingNodeIds) {
+      currentStore.removeExecutingNode(nodeId)
+    }
   }
 }
 
@@ -746,6 +747,6 @@ export async function executeSingleNode(nodeId: string): Promise<void> {
   } finally {
     const currentStore = useWorkflowStore.getState()
     currentStore.setIsExecuting(false)
-    currentStore.setExecutingNodeId(null)
+    currentStore.removeExecutingNode(nodeId)
   }
 }

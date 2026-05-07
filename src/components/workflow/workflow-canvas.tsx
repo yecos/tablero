@@ -485,6 +485,7 @@ export function WorkflowCanvas() {
   const panX = useWorkflowStore((s) => s.panX)
   const panY = useWorkflowStore((s) => s.panY)
   const connectingFrom = useWorkflowStore((s) => s.connectingFrom)
+  const executingNodeIds = useWorkflowStore((s) => s.executingNodeIds)
   const canUndo = useWorkflowStore((s) => s.canUndo)
   const canRedo = useWorkflowStore((s) => s.canRedo)
 
@@ -915,18 +916,34 @@ export function WorkflowCanvas() {
       const store = useWorkflowStore.getState()
       // Clear and load
       store.clearWorkflow()
+      // Map from old node IDs to new node IDs
+      const idMap = new Map<string, string>()
       for (const node of data.nodes || []) {
-        // Add each node
-        const newNode = store.addNode(node.type, node.x, node.y)
+        // Add each node and get the new ID
+        const newId = store.addNode(node.type, node.x, node.y)
+        idMap.set(node.id, newId)
         // Update with saved data
-        store.updateNode(newNode, {
+        store.updateNode(newId, {
           title: node.title,
           data: node.data,
           outputs: node.outputs,
           status: 'idle',
         })
       }
-      // Re-add connections (node IDs may have changed, skip for now)
+      // Re-add connections with mapped IDs
+      for (const conn of data.connections || []) {
+        const newSourceId = idMap.get(conn.sourceNodeId)
+        const newTargetId = idMap.get(conn.targetNodeId)
+        if (newSourceId && newTargetId) {
+          store.addConnection({
+            id: `conn_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+            sourceNodeId: newSourceId,
+            sourcePortId: conn.sourcePortId,
+            targetNodeId: newTargetId,
+            targetPortId: conn.targetPortId,
+          })
+        }
+      }
       toast.success('Workflow loaded')
     } catch {
       toast.error('Failed to load workflow')
@@ -982,7 +999,7 @@ export function WorkflowCanvas() {
             key={node.id}
             node={node}
             isSelected={selectedNodeId === node.id}
-            isExecuting={isExecuting && useWorkflowStore.getState().executingNodeId === node.id}
+            isExecuting={executingNodeIds.has(node.id)}
             onSelect={() => selectNode(node.id)}
             onStartDrag={(e) => handleNodeDragStart(node.id, e)}
             onStartConnection={(portId, direction, e) =>

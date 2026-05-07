@@ -10,13 +10,22 @@ import {
 
 const MAX_WORKFLOW_HISTORY = 30
 
+function deepCloneNode(n: WorkflowNode): WorkflowNode {
+  return {
+    ...n,
+    data: { ...n.data },
+    outputs: { ...n.outputs },
+    ports: n.ports.map(p => ({ ...p })),
+  }
+}
+
 export interface WorkflowState {
   // Workflow state
   nodes: WorkflowNode[]
   connections: WorkflowConnection[]
   selectedNodeId: string | null
   isExecuting: boolean
-  executingNodeId: string | null
+  executingNodeIds: Set<string>
 
   // History
   history: { nodes: WorkflowNode[]; connections: WorkflowConnection[] }[]
@@ -53,7 +62,8 @@ export interface WorkflowState {
 
   // Execution
   setIsExecuting: (executing: boolean) => void
-  setExecutingNodeId: (id: string | null) => void
+  addExecutingNode: (id: string) => void
+  removeExecutingNode: (id: string) => void
 
   // History
   undo: () => void
@@ -92,7 +102,7 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
   connections: [],
   selectedNodeId: null,
   isExecuting: false,
-  executingNodeId: null,
+  executingNodeIds: new Set<string>(),
 
   history: [{ nodes: [], connections: [] }],
   historyIndex: 0,
@@ -109,7 +119,7 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
     const node = createNode(type, x, y)
     set((state) => {
       const newNodes = [...state.nodes, node]
-      const snapshot = { nodes: newNodes.map(n => ({ ...n })), connections: [...state.connections] }
+      const snapshot = { nodes: newNodes.map(deepCloneNode), connections: [...state.connections] }
       const newHistory = state.history.slice(0, state.historyIndex + 1)
       newHistory.push(snapshot)
       if (newHistory.length > MAX_WORKFLOW_HISTORY) newHistory.shift()
@@ -132,7 +142,7 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
       const newConnections = state.connections.filter(
         c => c.sourceNodeId !== id && c.targetNodeId !== id
       )
-      const snapshot = { nodes: newNodes.map(n => ({ ...n })), connections: newConnections.map(c => ({ ...c })) }
+      const snapshot = { nodes: newNodes.map(deepCloneNode), connections: newConnections.map(c => ({ ...c })) }
       const newHistory = state.history.slice(0, state.historyIndex + 1)
       newHistory.push(snapshot)
       if (newHistory.length > MAX_WORKFLOW_HISTORY) newHistory.shift()
@@ -199,7 +209,7 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
     )
 
     const newConnections = [...filteredConnections, connection]
-    const snapshot = { nodes: state.nodes.map(n => ({ ...n })), connections: newConnections.map(c => ({ ...c })) }
+    const snapshot = { nodes: state.nodes.map(deepCloneNode), connections: newConnections.map(c => ({ ...c })) }
     const newHistory = state.history.slice(0, state.historyIndex + 1)
     newHistory.push(snapshot)
     if (newHistory.length > MAX_WORKFLOW_HISTORY) newHistory.shift()
@@ -217,7 +227,7 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
   removeConnection: (id) => {
     set((state) => {
       const newConnections = state.connections.filter(c => c.id !== id)
-      const snapshot = { nodes: state.nodes.map(n => ({ ...n })), connections: newConnections.map(c => ({ ...c })) }
+      const snapshot = { nodes: state.nodes.map(deepCloneNode), connections: newConnections.map(c => ({ ...c })) }
       const newHistory = state.history.slice(0, state.historyIndex + 1)
       newHistory.push(snapshot)
       if (newHistory.length > MAX_WORKFLOW_HISTORY) newHistory.shift()
@@ -267,7 +277,16 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
   },
 
   setIsExecuting: (executing) => set({ isExecuting: executing }),
-  setExecutingNodeId: (id) => set({ executingNodeId: id }),
+  addExecutingNode: (id) => set((state) => {
+    const ids = new Set(state.executingNodeIds)
+    ids.add(id)
+    return { executingNodeIds: ids }
+  }),
+  removeExecutingNode: (id) => set((state) => {
+    const ids = new Set(state.executingNodeIds)
+    ids.delete(id)
+    return { executingNodeIds: ids }
+  }),
 
   undo: () => {
     const { history, historyIndex } = get()
@@ -275,7 +294,7 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
     const newIndex = historyIndex - 1
     const restored = history[newIndex]
     set({
-      nodes: restored.nodes.map(n => ({ ...n })),
+      nodes: restored.nodes.map(deepCloneNode),
       connections: restored.connections.map(c => ({ ...c })),
       historyIndex: newIndex,
       canUndo: newIndex > 0,
@@ -290,7 +309,7 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
     const newIndex = historyIndex + 1
     const restored = history[newIndex]
     set({
-      nodes: restored.nodes.map(n => ({ ...n })),
+      nodes: restored.nodes.map(deepCloneNode),
       connections: restored.connections.map(c => ({ ...c })),
       historyIndex: newIndex,
       canUndo: newIndex > 0,
@@ -301,7 +320,7 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
 
   pushHistory: () => {
     const { nodes, connections, history, historyIndex } = get()
-    const snapshot = { nodes: nodes.map(n => ({ ...n })), connections: connections.map(c => ({ ...c })) }
+    const snapshot = { nodes: nodes.map(deepCloneNode), connections: connections.map(c => ({ ...c })) }
     const newHistory = history.slice(0, historyIndex + 1)
     newHistory.push(snapshot)
     if (newHistory.length > MAX_WORKFLOW_HISTORY) newHistory.shift()

@@ -1,3 +1,8 @@
+// NOTE: Currently this endpoint uses text-to-image generation as a fallback.
+// True outpainting would require dedicated providers that support
+// image-to-image transformation. The input image is accepted but only used
+// as context for prompt enhancement.
+
 import { NextRequest, NextResponse } from 'next/server'
 import { generateImage } from '@/lib/ai-providers'
 

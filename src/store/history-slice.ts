@@ -5,7 +5,7 @@ import type { DesignElement } from './types'
 export const MAX_HISTORY = 50
 
 export interface HistorySlice {
-  history: DesignElement[][]
+  history: { elements: DesignElement[]; layers: { id: string; name: string; visible: boolean; locked: boolean; elements: string[] }[] }[]
   historyIndex: number
   canUndo: boolean
   canRedo: boolean
@@ -15,14 +15,17 @@ export interface HistorySlice {
 }
 
 export const createHistorySlice: StateCreator<DesignState, [], [], HistorySlice> = (set, get) => ({
-  history: [[]],
+  history: [{ elements: [], layers: [{ id: 'default', name: 'Layer 1', visible: true, locked: false, elements: [] }] }],
   historyIndex: 0,
   canUndo: false,
   canRedo: false,
 
   pushHistory: () => {
-    const { elements, history, historyIndex } = get()
-    const snapshot = elements.map(e => ({ ...e }))
+    const { elements, layers, history, historyIndex } = get()
+    const snapshot = { 
+      elements: elements.map(e => ({ ...e })),
+      layers: layers.map(l => ({ ...l }))
+    }
     const newHistory = history.slice(0, historyIndex + 1)
     newHistory.push(snapshot)
     if (newHistory.length > MAX_HISTORY) newHistory.shift()
@@ -39,14 +42,14 @@ export const createHistorySlice: StateCreator<DesignState, [], [], HistorySlice>
     const { history, historyIndex } = get()
     if (historyIndex <= 0) return
     const newIndex = historyIndex - 1
-    const restoredElements = history[newIndex].map(e => ({ ...e }))
+    const restored = history[newIndex]
     set({
-      elements: restoredElements,
+      elements: restored.elements.map(e => ({ ...e })),
+      layers: restored.layers.map(l => ({ ...l })),
       historyIndex: newIndex,
       canUndo: newIndex > 0,
       canRedo: newIndex < history.length - 1,
       selectedElementId: null,
-      layers: [{ id: 'default', name: 'Layer 1', visible: true, locked: false, elements: restoredElements.map(e => e.id) }],
     })
   },
 
@@ -54,14 +57,14 @@ export const createHistorySlice: StateCreator<DesignState, [], [], HistorySlice>
     const { history, historyIndex } = get()
     if (historyIndex >= history.length - 1) return
     const newIndex = historyIndex + 1
-    const restoredElements = history[newIndex].map(e => ({ ...e }))
+    const restored = history[newIndex]
     set({
-      elements: restoredElements,
+      elements: restored.elements.map(e => ({ ...e })),
+      layers: restored.layers.map(l => ({ ...l })),
       historyIndex: newIndex,
       canUndo: newIndex > 0,
       canRedo: newIndex < history.length - 1,
       selectedElementId: null,
-      layers: [{ id: 'default', name: 'Layer 1', visible: true, locked: false, elements: restoredElements.map(e => e.id) }],
     })
   },
 })

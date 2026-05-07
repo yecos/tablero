@@ -123,7 +123,9 @@ export function useImageUpload(params: UseImageUploadParams): UseImageUploadRetu
           fetch('/api/image-to-3d', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ imageBase64: compressedSrc }),
+            body: JSON.stringify({ 
+              imageBase64: compressedSrc.startsWith('data:') ? compressedSrc.split(',')[1] : compressedSrc 
+            }),
           })
             .then(res => res.json())
             .then(data => {

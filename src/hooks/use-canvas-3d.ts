@@ -8,7 +8,8 @@ export interface UseCanvas3DParams {
   updateElement: (id: string, updates: Partial<DesignElement>) => void
   addElement: (element: DesignElement) => void
   addEdge: (edge: NodeEdge) => void
-  setIsGenerating3D: (generating: boolean) => void
+  startGenerating3D: (elementId: string) => void
+  endGenerating3D: (elementId: string) => void
 }
 
 export interface UseCanvas3DReturn {
@@ -22,7 +23,8 @@ export function useCanvas3D(params: UseCanvas3DParams): UseCanvas3DReturn {
     updateElement,
     addElement,
     addEdge,
-    setIsGenerating3D,
+    startGenerating3D,
+    endGenerating3D,
   } = params
 
   const [converting3DId, setConverting3DId] = useState<string | null>(null)
@@ -38,14 +40,28 @@ export function useCanvas3D(params: UseCanvas3DParams): UseCanvas3DReturn {
     // Mark as generating
     updateElement(elementId, { isGenerating3D: true })
     setConverting3DId(elementId)
-    setIsGenerating3D(true)
+    startGenerating3D(elementId)
     toast.loading('Generating 3D model... This may take a minute.', { id: 'gen-3d' })
 
     try {
+      // Determine if src is a URL or base64 data URL
+      let requestBody: { imageBase64?: string; imageUrl?: string }
+      if (element.src.startsWith('data:')) {
+        // Extract base64 from data URL
+        const base64 = element.src.split(',')[1]
+        requestBody = { imageBase64: base64 }
+      } else if (element.src.startsWith('http')) {
+        // It's a URL
+        requestBody = { imageUrl: element.src }
+      } else {
+        // Assume it's raw base64
+        requestBody = { imageBase64: element.src }
+      }
+
       const response = await fetch('/api/image-to-3d', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ imageBase64: element.src }),
+        body: JSON.stringify(requestBody),
       })
 
       if (!response.ok) throw new Error('Failed to generate 3D model')
@@ -105,14 +121,14 @@ export function useCanvas3D(params: UseCanvas3DParams): UseCanvas3DReturn {
       }
     } catch (error) {
       console.error('3D generation failed:', error)
-      const message = error instanceof Error ? error.message : 'Error desconocido'
-      toast.error(`Error al generar modelo 3D: ${message}`, { id: 'gen-3d' })
+      const message = error instanceof Error ? error.message : 'Unknown error'
+      toast.error(`Error generating 3D model: ${message}`, { id: 'gen-3d' })
       updateElement(elementId, { isGenerating3D: false })
     } finally {
       setConverting3DId(null)
-      setIsGenerating3D(false)
+      endGenerating3D(elementId)
     }
-  }, [elements, updateElement, addElement, addEdge, setIsGenerating3D])
+  }, [elements, updateElement, addElement, addEdge, startGenerating3D, endGenerating3D])
 
   return {
     converting3DId,
