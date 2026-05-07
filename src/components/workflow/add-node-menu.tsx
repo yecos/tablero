@@ -10,87 +10,162 @@ import {
   Box,
   Palette,
   Monitor,
-  FileText,
   Upload,
+  Pipette,
+  Hash,
+  Wand2,
+  FileCode,
+  GitBranch,
+  Merge,
+  StickyNote,
+  Download,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 // ---------------------------------------------------------------------------
-// Node type config for the menu
+// Node categories with items
 // ---------------------------------------------------------------------------
-const NODE_MENU_ITEMS: {
+interface NodeMenuItem {
   type: WorkflowNodeType
   icon: React.ElementType
   label: string
   description: string
-  category: 'input' | 'process' | 'output'
-}[] = [
-  // ── Input nodes ──
+}
+
+interface NodeCategory {
+  id: string
+  label: string
+  items: NodeMenuItem[]
+}
+
+const NODE_CATEGORIES: NodeCategory[] = [
   {
-    type: 'text-input',
-    icon: FileText,
-    label: 'Texto',
-    description: 'Ingresar texto manualmente',
-    category: 'input',
+    id: 'input',
+    label: 'Inputs',
+    items: [
+      {
+        type: 'text-input',
+        icon: Type,
+        label: 'Text Input',
+        description: 'Type text directly',
+      },
+      {
+        type: 'image-input',
+        icon: Upload,
+        label: 'Image Input',
+        description: 'Upload or paste image',
+      },
+      {
+        type: 'color-picker',
+        icon: Pipette,
+        label: 'Color Picker',
+        description: 'Pick a color value',
+      },
+      {
+        type: 'number-input',
+        icon: Hash,
+        label: 'Number Input',
+        description: 'Set a numeric value',
+      },
+    ],
   },
   {
-    type: 'image-input',
-    icon: Upload,
-    label: 'Imagen',
-    description: 'Subir imagen o pegar URL',
-    category: 'input',
+    id: 'ai',
+    label: 'AI Generation',
+    items: [
+      {
+        type: 'text-ai',
+        icon: Wand2,
+        label: 'AI Text',
+        description: 'Generate text with AI',
+      },
+      {
+        type: 'image-gen',
+        icon: ImageIcon,
+        label: 'Image Gen',
+        description: 'Generate images from prompts',
+      },
+      {
+        type: 'image-edit',
+        icon: Pencil,
+        label: 'Image Edit',
+        description: 'Edit & decompose images',
+      },
+      {
+        type: '3d-gen',
+        icon: Box,
+        label: '3D Gen',
+        description: 'Convert images to 3D',
+      },
+      {
+        type: 'brand-kit',
+        icon: Palette,
+        label: 'Brand Kit',
+        description: 'Generate brand assets',
+      },
+    ],
   },
-  // ── Process nodes ──
   {
-    type: 'text-ai',
-    icon: Type,
-    label: 'AI Text',
-    description: 'Generar texto con IA',
-    category: 'process',
+    id: 'transform',
+    label: 'Transform',
+    items: [
+      {
+        type: 'image-transform',
+        icon: Monitor,
+        label: 'Image Transform',
+        description: 'Resize, filter, adjust',
+      },
+      {
+        type: 'text-template',
+        icon: FileCode,
+        label: 'Text Template',
+        description: 'Template with variables',
+      },
+    ],
   },
   {
-    type: 'image-gen',
-    icon: ImageIcon,
-    label: 'Image Gen',
-    description: 'Generar imágenes desde prompts',
-    category: 'process',
+    id: 'logic',
+    label: 'Logic',
+    items: [
+      {
+        type: 'condition',
+        icon: GitBranch,
+        label: 'Condition',
+        description: 'If/else branching',
+      },
+      {
+        type: 'merge',
+        icon: Merge,
+        label: 'Merge',
+        description: 'Combine multiple inputs',
+      },
+    ],
   },
   {
-    type: 'image-edit',
-    icon: Pencil,
-    label: 'Image Edit',
-    description: 'Editar y analizar imágenes',
-    category: 'process',
-  },
-  {
-    type: '3d-gen',
-    icon: Box,
-    label: '3D Gen',
-    description: 'Convertir imágenes a 3D',
-    category: 'process',
-  },
-  {
-    type: 'brand-kit',
-    icon: Palette,
-    label: 'Brand Kit',
-    description: 'Generar activos de marca',
-    category: 'process',
-  },
-  // ── Output nodes ──
-  {
-    type: 'output',
-    icon: Monitor,
+    id: 'output',
     label: 'Output',
-    description: 'Previsualizar resultados',
-    category: 'output',
+    items: [
+      {
+        type: 'output',
+        icon: Monitor,
+        label: 'Output',
+        description: 'Preview results',
+      },
+      {
+        type: 'export',
+        icon: Download,
+        label: 'Export',
+        description: 'Download results',
+      },
+      {
+        type: 'note',
+        icon: StickyNote,
+        label: 'Note',
+        description: 'Add a comment',
+      },
+    ],
   },
 ]
-
-const CATEGORY_LABELS: Record<string, string> = {
-  input: 'Entrada',
-  process: 'Proceso',
-  output: 'Salida',
-}
 
 // ---------------------------------------------------------------------------
 // Props
@@ -126,25 +201,20 @@ export function AddNodeMenu({ x, y, onAddNode, onClose }: AddNodeMenuProps) {
     }
   }, [onClose])
 
-  // Group items by category
-  const categories = ['input', 'process', 'output'] as const
-
   return (
     <div
       ref={menuRef}
-      className="absolute z-50 rounded-xl border border-white/10 bg-[#12121a] p-3 shadow-2xl shadow-black/50 backdrop-blur-md w-[280px] max-h-[420px] overflow-y-auto"
-      style={{ left: x, top: y }}
+      className="absolute z-50 rounded-xl border border-white/10 bg-[#12121a] shadow-2xl shadow-black/50 backdrop-blur-md overflow-hidden"
+      style={{ left: x, top: y, maxHeight: '70vh' }}
     >
-      {categories.map((category) => {
-        const items = NODE_MENU_ITEMS.filter((i) => i.category === category)
-        if (items.length === 0) return null
-        return (
-          <div key={category} className="mb-2 last:mb-0">
-            <p className="mb-1.5 px-1 text-[10px] font-semibold text-white/30 uppercase tracking-widest">
-              {CATEGORY_LABELS[category]}
+      <div className="overflow-y-auto max-h-[70vh] p-2">
+        {NODE_CATEGORIES.map((category) => (
+          <div key={category.id} className="mb-2 last:mb-0">
+            <p className="mb-1 px-2 text-[10px] font-semibold text-white/30 uppercase tracking-widest">
+              {category.label}
             </p>
-            <div className="grid grid-cols-1 gap-0.5">
-              {items.map(({ type, icon: Icon, label, description }) => {
+            <div className="grid grid-cols-2 gap-0.5">
+              {category.items.map(({ type, icon: Icon, label, description }) => {
                 const defaults = NODE_DEFAULTS[type]
                 return (
                   <button
@@ -154,21 +224,21 @@ export function AddNodeMenu({ x, y, onAddNode, onClose }: AddNodeMenuProps) {
                       onClose()
                     }}
                     className={cn(
-                      'group flex items-center gap-2.5 rounded-lg px-2 py-2 text-left transition-all',
-                      'hover:bg-white/5 active:scale-[0.98]'
+                      'group flex items-start gap-2 rounded-lg p-2 text-left transition-all',
+                      'hover:bg-white/5 active:scale-[0.97]'
                     )}
                   >
                     <span
-                      className="flex h-7 w-7 items-center justify-center rounded-md shrink-0"
+                      className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md mt-0.5"
                       style={{ backgroundColor: defaults.color + '22' }}
                     >
-                      {React.createElement(Icon, { size: 14, style: { color: defaults.color } })}
+                      {React.createElement(Icon, { size: 12, style: { color: defaults.color } })}
                     </span>
                     <div className="min-w-0">
-                      <span className="text-xs font-medium text-white/90 block truncate">
+                      <span className="text-[11px] font-medium text-white/90 block truncate">
                         {label}
                       </span>
-                      <span className="text-[10px] text-white/35 block truncate">
+                      <span className="text-[9px] leading-tight text-white/35 block">
                         {description}
                       </span>
                     </div>
@@ -177,8 +247,8 @@ export function AddNodeMenu({ x, y, onAddNode, onClose }: AddNodeMenuProps) {
               })}
             </div>
           </div>
-        )
-      })}
+        ))}
+      </div>
     </div>
   )
 }

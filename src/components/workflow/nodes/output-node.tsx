@@ -27,6 +27,8 @@ const dataTypeConfig: Record<
   model3d: { icon: Box, label: '3D Model', color: '#06b6d4' },
   brandKit: { icon: Palette, label: 'Brand Kit', color: '#10b981' },
   imageLayers: { icon: Layers, label: 'Image Layers', color: '#f59e0b' },
+  color: { icon: Palette, label: 'Color', color: '#f43f5e' },
+  number: { icon: FileText, label: 'Number', color: '#0ea5e9' },
   any: { icon: Inbox, label: 'Any', color: '#6366f1' },
 }
 
@@ -151,6 +153,30 @@ function renderOutputContent(portValue: PortDataValue) {
         </div>
       )
     }
+
+    case 'color': {
+      const colorVal = typeof value === 'string' ? value : String(value)
+      return (
+        <div className="rounded-md bg-white/5 border border-white/10 p-2">
+          <div className="flex items-center gap-2">
+            <div
+              className="h-8 w-8 rounded-md border border-white/10"
+              style={{ backgroundColor: colorVal }}
+            />
+            <span className="text-xs font-mono text-slate-300">{colorVal}</span>
+          </div>
+        </div>
+      )
+    }
+
+    case 'number':
+      return (
+        <div className="rounded-md bg-white/5 border border-white/10 p-2">
+          <p className="text-lg font-mono text-sky-300">
+            {typeof value === 'number' ? value : String(value)}
+          </p>
+        </div>
+      )
 
     default:
       return (

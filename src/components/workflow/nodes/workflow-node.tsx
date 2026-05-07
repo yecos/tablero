@@ -15,6 +15,14 @@ import { BrandKitNode } from './brand-kit-node'
 import { OutputNode } from './output-node'
 import { TextInputNode } from './text-input-node'
 import { ImageInputNode } from './image-input-node'
+import { ColorPickerNode } from './color-picker-node'
+import { NumberInputNode } from './number-input-node'
+import { ImageTransformNode } from './image-transform-node'
+import { TextTemplateNode } from './text-template-node'
+import { ConditionNode } from './condition-node'
+import { MergeNode } from './merge-node'
+import { NoteNode } from './note-node'
+import { ExportNode } from './export-node'
 import {
   FileText,
   ImageIcon,
@@ -26,7 +34,16 @@ import {
   Play,
   Loader2,
   AlertCircle,
+  Type,
   Upload,
+  Pipette,
+  Hash,
+  Wand2,
+  FileCode,
+  GitBranch,
+  Merge,
+  StickyNote,
+  Download,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 
@@ -37,19 +54,29 @@ const PORT_COLORS: Record<PortDataType, string> = {
   model3d: '#06b6d4',
   brandKit: '#10b981',
   imageLayers: '#f59e0b',
+  color: '#f43f5e',
+  number: '#0ea5e9',
   any: '#6366f1',
 }
 
 // --- Node icon map ---
 const NODE_ICONS: Record<WNodeType, LucideIcon> = {
-  'text-input': FileText,
-  'image-input': Upload,
-  'text-ai': FileText,
+  'text-ai': Wand2,
   'image-gen': ImageIcon,
   'image-edit': Pencil,
   '3d-gen': Box,
   'brand-kit': Palette,
-  output: Eye,
+  'output': Eye,
+  'text-input': Type,
+  'image-input': Upload,
+  'color-picker': Pipette,
+  'number-input': Hash,
+  'image-transform': ImageIcon,
+  'text-template': FileCode,
+  'condition': GitBranch,
+  'merge': Merge,
+  'note': StickyNote,
+  'export': Download,
 }
 
 // --- Status config ---
@@ -159,10 +186,6 @@ function NodeContent({
   onDataChange: (nodeId: string, data: Record<string, unknown>) => void
 }) {
   switch (node.type) {
-    case 'text-input':
-      return <TextInputNode node={node} onDataChange={onDataChange} />
-    case 'image-input':
-      return <ImageInputNode node={node} onDataChange={onDataChange} />
     case 'text-ai':
       return <TextAINode node={node} onDataChange={onDataChange} />
     case 'image-gen':
@@ -175,6 +198,26 @@ function NodeContent({
       return <BrandKitNode node={node} onDataChange={onDataChange} />
     case 'output':
       return <OutputNode node={node} onDataChange={onDataChange} />
+    case 'text-input':
+      return <TextInputNode node={node} onDataChange={onDataChange} />
+    case 'image-input':
+      return <ImageInputNode node={node} onDataChange={onDataChange} />
+    case 'color-picker':
+      return <ColorPickerNode node={node} onDataChange={onDataChange} />
+    case 'number-input':
+      return <NumberInputNode node={node} onDataChange={onDataChange} />
+    case 'image-transform':
+      return <ImageTransformNode node={node} onDataChange={onDataChange} />
+    case 'text-template':
+      return <TextTemplateNode node={node} onDataChange={onDataChange} />
+    case 'condition':
+      return <ConditionNode node={node} onDataChange={onDataChange} />
+    case 'merge':
+      return <MergeNode node={node} onDataChange={onDataChange} />
+    case 'note':
+      return <NoteNode node={node} onDataChange={onDataChange} />
+    case 'export':
+      return <ExportNode node={node} onDataChange={onDataChange} />
     default:
       return null
   }
@@ -196,6 +239,7 @@ export function WorkflowNodeComponent({
   const color = defaults.color
   const Icon = NODE_ICONS[node.type]
   const statusConfig = STATUS_CONFIG[node.status]
+  const isNote = node.type === 'note'
 
   const inputPorts = node.ports.filter((p) => p.direction === 'input')
   const outputPorts = node.ports.filter((p) => p.direction === 'output')
@@ -203,7 +247,7 @@ export function WorkflowNodeComponent({
   // Evenly space ports along the card height
   const headerHeight = 36 // approximate header height
   const contentPadding = 32 // top/bottom padding for content area
-  const footerHeight = 36 // approximate footer height
+  const footerHeight = isNote ? 0 : 36 // approximate footer height
   const totalPortArea = node.height - headerHeight - footerHeight - contentPadding
 
   const getPortY = (index: number, total: number) => {
@@ -211,6 +255,8 @@ export function WorkflowNodeComponent({
     const step = totalPortArea / (total + 1)
     return headerHeight + contentPadding / 2 + step * (index + 1)
   }
+
+  const noteColor = (node.data.color as string) || color
 
   return (
     <div
@@ -267,19 +313,20 @@ export function WorkflowNodeComponent({
       <div
         className={`
           relative rounded-xl overflow-hidden
-          bg-[#12121a]/90 backdrop-blur-sm
+          ${isNote ? 'bg-[#1a1a1f]/95 border-dashed' : 'bg-[#12121a]/90 backdrop-blur-sm'}
           border transition-all duration-200
-          ${isSelected ? 'ring-2 border-white/20' : 'border-white/10 hover:border-white/15'}
+          ${isSelected ? 'ring-2 border-white/20' : isNote ? 'border-dashed' : 'border-white/10 hover:border-white/15'}
           ${node.status === 'running' ? 'shadow-lg' : 'shadow-md'}
         `}
         style={{
-          borderTop: `2px solid ${color}`,
+          borderTop: `2px solid ${isNote ? noteColor : color}`,
+          borderColor: isNote && !isSelected ? `${noteColor}30` : undefined,
           boxShadow: isSelected
-            ? `0 0 20px ${color}20, 0 4px 20px rgba(0,0,0,0.4)`
+            ? `0 0 20px ${(isNote ? noteColor : color)}20, 0 4px 20px rgba(0,0,0,0.4)`
             : node.status === 'running'
-              ? `0 0 30px ${color}15, 0 4px 16px rgba(0,0,0,0.3)`
+              ? `0 0 30px ${(isNote ? noteColor : color)}15, 0 4px 16px rgba(0,0,0,0.3)`
               : `0 2px 8px rgba(0,0,0,0.3)`,
-          ...(isSelected ? { '--tw-ring-color': `${color}60` } as React.CSSProperties : {}),
+          ...(isSelected ? { '--tw-ring-color': `${isNote ? noteColor : color}60` } as React.CSSProperties : {}),
         }}
       >
         {/* Header */}
@@ -289,7 +336,7 @@ export function WorkflowNodeComponent({
         >
           <Icon
             className="h-3.5 w-3.5 shrink-0"
-            style={{ color }}
+            style={{ color: isNote ? noteColor : color }}
           />
           <span className="text-xs font-medium text-slate-200 truncate flex-1">
             {node.title}
@@ -326,49 +373,51 @@ export function WorkflowNodeComponent({
           </div>
         )}
 
-        {/* Footer - Run button */}
-        <div className="px-3 pb-2 pt-1 border-t border-white/5">
-          <button
-            onClick={(e) => {
-              e.stopPropagation()
-              onRunNode(node.id)
-            }}
-            disabled={node.status === 'running'}
-            className={`
-              w-full h-7 rounded-md flex items-center justify-center gap-1.5
-              text-[11px] font-medium transition-all duration-150
-              ${
-                node.status === 'running'
-                  ? 'bg-purple-500/10 text-purple-300 cursor-wait'
-                  : node.status === 'completed'
-                    ? 'bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/20'
-                    : 'bg-white/5 text-slate-300 hover:bg-white/10 border border-white/10'
+        {/* Footer - Run button (hidden for note nodes) */}
+        {!isNote && (
+          <div className="px-3 pb-2 pt-1 border-t border-white/5">
+            <button
+              onClick={(e) => {
+                e.stopPropagation()
+                onRunNode(node.id)
+              }}
+              disabled={node.status === 'running'}
+              className={`
+                w-full h-7 rounded-md flex items-center justify-center gap-1.5
+                text-[11px] font-medium transition-all duration-150
+                ${
+                  node.status === 'running'
+                    ? 'bg-purple-500/10 text-purple-300 cursor-wait'
+                    : node.status === 'completed'
+                      ? 'bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/20'
+                      : 'bg-white/5 text-slate-300 hover:bg-white/10 border border-white/10'
+                }
+              `}
+              style={
+                node.status !== 'running' && node.status !== 'completed'
+                  ? { borderColor: `${color}30` }
+                  : undefined
               }
-            `}
-            style={
-              node.status !== 'running' && node.status !== 'completed'
-                ? { borderColor: `${color}30` }
-                : undefined
-            }
-          >
-            {node.status === 'running' ? (
-              <>
-                <Loader2 className="h-3 w-3 animate-spin" />
-                Running...
-              </>
-            ) : node.status === 'completed' ? (
-              <>
-                <Play className="h-3 w-3" />
-                Re-run
-              </>
-            ) : (
-              <>
-                <Play className="h-3 w-3" style={{ color }} />
-                Run
-              </>
-            )}
-          </button>
-        </div>
+            >
+              {node.status === 'running' ? (
+                <>
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                  Running...
+                </>
+              ) : node.status === 'completed' ? (
+                <>
+                  <Play className="h-3 w-3" />
+                  Re-run
+                </>
+              ) : (
+                <>
+                  <Play className="h-3 w-3" style={{ color }} />
+                  Run
+                </>
+              )}
+            </button>
+          </div>
+        )}
       </div>
     </div>
   )

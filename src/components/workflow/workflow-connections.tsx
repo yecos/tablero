@@ -63,6 +63,8 @@ const TYPE_COLORS: Record<PortDataType, { from: string; to: string }> = {
   model3d: { from: '#06b6d4', to: '#22d3ee' },
   brandKit: { from: '#10b981', to: '#34d399' },
   imageLayers: { from: '#f59e0b', to: '#fbbf24' },
+  color: { from: '#f43f5e', to: '#fb7185' },
+  number: { from: '#0ea5e9', to: '#38bdf8' },
   any: { from: '#8b5cf6', to: '#22d3ee' },
 }
 

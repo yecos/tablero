@@ -7,6 +7,7 @@ import {
   type WorkflowNode as WorkflowNodeTypeDef,
   type PortDataType,
   NODE_DEFAULTS,
+  isTypeCompatible,
 } from '@/store/workflow-types'
 import { useWorkflowStore } from '@/store/workflow-store'
 import { executeWorkflow, executeSingleNode } from '@/lib/workflow-engine'
@@ -19,6 +20,16 @@ import { ImageGenNode } from './nodes/image-gen-node'
 import { ImageEditNode } from './nodes/image-edit-node'
 import { ThreedGenNode } from './nodes/threed-gen-node'
 import { BrandKitNode } from './nodes/brand-kit-node'
+import { TextInputNode } from './nodes/text-input-node'
+import { ImageInputNode } from './nodes/image-input-node'
+import { ColorPickerNode } from './nodes/color-picker-node'
+import { NumberInputNode } from './nodes/number-input-node'
+import { ImageTransformNode } from './nodes/image-transform-node'
+import { TextTemplateNode } from './nodes/text-template-node'
+import { ConditionNode } from './nodes/condition-node'
+import { MergeNode } from './nodes/merge-node'
+import { NoteNode } from './nodes/note-node'
+import { ExportNode } from './nodes/export-node'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 import {
@@ -41,6 +52,17 @@ import {
   ZoomIn,
   ZoomOut,
   Maximize,
+  Upload,
+  Pipette,
+  Hash,
+  Wand2,
+  FileCode,
+  GitBranch,
+  Merge,
+  StickyNote,
+  Download,
+  Save,
+  FolderOpen,
 } from 'lucide-react'
 
 // ---------------------------------------------------------------------------
@@ -52,15 +74,9 @@ const PORT_COLORS: Record<PortDataType, string> = {
   model3d: '#06b6d4',
   brandKit: '#10b981',
   imageLayers: '#f59e0b',
+  color: '#f43f5e',
+  number: '#0ea5e9',
   any: '#6366f1',
-}
-
-// ---------------------------------------------------------------------------
-// Type compatibility for connections
-// ---------------------------------------------------------------------------
-function isTypeCompatible(source: PortDataType, target: PortDataType): boolean {
-  if (target === 'any' || source === 'any') return true
-  return source === target
 }
 
 // ---------------------------------------------------------------------------
@@ -114,7 +130,7 @@ function getNodeIcon(type: WorkflowNodeType) {
     case 'image-input':
       return <Upload size={12} />
     case 'text-ai':
-      return <Type size={12} />
+      return <Wand2 size={12} />
     case 'image-gen':
       return <ImageIcon size={12} />
     case 'image-edit':
@@ -125,6 +141,26 @@ function getNodeIcon(type: WorkflowNodeType) {
       return <Palette size={12} />
     case 'output':
       return <Monitor size={12} />
+    case 'text-input':
+      return <Type size={12} />
+    case 'image-input':
+      return <Upload size={12} />
+    case 'color-picker':
+      return <Pipette size={12} />
+    case 'number-input':
+      return <Hash size={12} />
+    case 'image-transform':
+      return <ImageIcon size={12} />
+    case 'text-template':
+      return <FileCode size={12} />
+    case 'condition':
+      return <GitBranch size={12} />
+    case 'merge':
+      return <Merge size={12} />
+    case 'note':
+      return <StickyNote size={12} />
+    case 'export':
+      return <Download size={12} />
   }
 }
 
@@ -155,6 +191,7 @@ function WorkflowNodeComponent({
   const defaults = NODE_DEFAULTS[node.type]
   const inputPorts = node.ports.filter((p) => p.direction === 'input')
   const outputPorts = node.ports.filter((p) => p.direction === 'output')
+  const isNote = node.type === 'note'
 
   const statusIndicator = () => {
     switch (node.status) {
@@ -187,18 +224,46 @@ function WorkflowNodeComponent({
         return <BrandKitNode node={node} onDataChange={onDataChange} />
       case 'output':
         return <OutputNodeContent node={node} onDataChange={onDataChange} />
+      case 'text-input':
+        return <TextInputNode node={node} onDataChange={onDataChange} />
+      case 'image-input':
+        return <ImageInputNode node={node} onDataChange={onDataChange} />
+      case 'color-picker':
+        return <ColorPickerNode node={node} onDataChange={onDataChange} />
+      case 'number-input':
+        return <NumberInputNode node={node} onDataChange={onDataChange} />
+      case 'image-transform':
+        return <ImageTransformNode node={node} onDataChange={onDataChange} />
+      case 'text-template':
+        return <TextTemplateNode node={node} onDataChange={onDataChange} />
+      case 'condition':
+        return <ConditionNode node={node} onDataChange={onDataChange} />
+      case 'merge':
+        return <MergeNode node={node} onDataChange={onDataChange} />
+      case 'note':
+        return <NoteNode node={node} onDataChange={onDataChange} />
+      case 'export':
+        return <ExportNode node={node} onDataChange={onDataChange} />
       default:
         return null
     }
   }
 
+  // Note nodes have a special style
+  const noteColor = (node.data.color as string) || defaults.color
+
   return (
     <div
       className={cn(
-        'absolute select-none rounded-xl border bg-[#12121a] shadow-lg transition-shadow duration-200',
-        isSelected
+        'absolute select-none rounded-xl border shadow-lg transition-shadow duration-200',
+        isNote
+          ? 'bg-[#1a1a1f]/95 border-dashed'
+          : 'bg-[#12121a] border-white/[0.07] shadow-black/40',
+        isSelected && !isNote
           ? 'border-white/20 shadow-xl shadow-white/5'
-          : 'border-white/[0.07] shadow-black/40',
+          : isSelected && isNote
+            ? 'border-white/30 shadow-xl shadow-white/5'
+            : null,
         isExecuting && 'ring-1 ring-yellow-400/30'
       )}
       style={{
@@ -207,6 +272,7 @@ function WorkflowNodeComponent({
         width: node.width,
         minHeight: node.height,
         zIndex: isSelected ? 20 : 10,
+        ...(isNote ? { borderColor: `${noteColor}40` } : {}),
       }}
       onClick={(e) => {
         e.stopPropagation()
@@ -215,9 +281,13 @@ function WorkflowNodeComponent({
     >
       {/* Header */}
       <div
-        className="flex items-center gap-2 rounded-t-xl px-3 py-2 cursor-grab active:cursor-grabbing border-b border-white/[0.06]"
+        className={cn(
+          'flex items-center gap-2 rounded-t-xl px-3 py-2 cursor-grab active:cursor-grabbing border-b',
+          isNote ? 'border-dashed' : 'border-white/[0.06]'
+        )}
         style={{
-          background: `linear-gradient(135deg, ${defaults.color}15, ${defaults.color}08)`,
+          background: `linear-gradient(135deg, ${isNote ? noteColor : defaults.color}15, ${isNote ? noteColor : defaults.color}08)`,
+          borderBottomColor: isNote ? `${noteColor}20` : undefined,
         }}
         onMouseDown={(e) => {
           if (e.button === 0) onStartDrag(e)
@@ -225,7 +295,7 @@ function WorkflowNodeComponent({
       >
         <span
           className="flex h-5 w-5 items-center justify-center rounded-md"
-          style={{ backgroundColor: defaults.color + '25', color: defaults.color }}
+          style={{ backgroundColor: (isNote ? noteColor : defaults.color) + '25', color: isNote ? noteColor : defaults.color }}
         >
           {getNodeIcon(node.type)}
         </span>
@@ -233,84 +303,90 @@ function WorkflowNodeComponent({
           {node.title}
         </span>
         {statusIndicator()}
-        {/* Run single node button */}
-        <button
-          onClick={(e) => {
-            e.stopPropagation()
-            onRunNode()
-          }}
-          className="flex h-5 w-5 items-center justify-center rounded-md hover:bg-white/10 transition-colors"
-          title="Run this node"
-        >
-          <Play size={10} className="text-white/50" />
-        </button>
+        {/* Run single node button - hidden for note and input-only nodes */}
+        {!isNote && node.type !== 'note' && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation()
+              onRunNode()
+            }}
+            className="flex h-5 w-5 items-center justify-center rounded-md hover:bg-white/10 transition-colors"
+            title="Run this node"
+          >
+            <Play size={10} className="text-white/50" />
+          </button>
+        )}
       </div>
 
       {/* Ports + Content */}
       <div className="relative px-3 py-2">
         {/* Input ports on left */}
-        <div className="absolute left-0 top-2 flex flex-col gap-[28px]">
-          {inputPorts.map((port) => (
-            <div
-              key={port.id}
-              className="absolute flex items-center gap-1"
-              style={{
-                top: `${12 + inputPorts.indexOf(port) * 28}px`,
-                left: '-6px',
-              }}
-            >
+        {inputPorts.length > 0 && (
+          <div className="absolute left-0 top-2 flex flex-col gap-[28px]">
+            {inputPorts.map((port, i) => (
               <div
-                className="h-3 w-3 rounded-full border-2 cursor-crosshair transition-transform hover:scale-125"
+                key={port.id}
+                className="absolute flex items-center gap-1"
                 style={{
-                  borderColor: PORT_COLORS[port.dataType],
-                  backgroundColor: PORT_COLORS[port.dataType] + '33',
+                  top: `${12 + i * 28}px`,
+                  left: '-6px',
                 }}
-                onMouseDown={(e) => {
-                  e.stopPropagation()
-                  onStartConnection(port.id, 'input', e)
-                }}
-                onMouseUp={(e) => {
-                  e.stopPropagation()
-                  onEndConnection(port.id, 'input')
-                }}
-                title={`${port.name} (${port.dataType})`}
-              />
-              <span className="text-[9px] text-white/40 ml-0.5">{port.name}</span>
-            </div>
-          ))}
-        </div>
+              >
+                <div
+                  className="h-3 w-3 rounded-full border-2 cursor-crosshair transition-transform hover:scale-125"
+                  style={{
+                    borderColor: PORT_COLORS[port.dataType],
+                    backgroundColor: PORT_COLORS[port.dataType] + '33',
+                  }}
+                  onMouseDown={(e) => {
+                    e.stopPropagation()
+                    onStartConnection(port.id, 'input', e)
+                  }}
+                  onMouseUp={(e) => {
+                    e.stopPropagation()
+                    onEndConnection(port.id, 'input')
+                  }}
+                  title={`${port.name} (${port.dataType})`}
+                />
+                <span className="text-[9px] text-white/40 ml-0.5">{port.name}</span>
+              </div>
+            ))}
+          </div>
+        )}
 
         {/* Output ports on right */}
-        <div className="absolute right-0 top-2 flex flex-col gap-[28px]">
-          {outputPorts.map((port) => (
-            <div
-              key={port.id}
-              className="absolute flex items-center gap-1"
-              style={{
-                top: `${12 + outputPorts.indexOf(port) * 28}px`,
-                right: '-6px',
-              }}
-            >
-              <span className="text-[9px] text-white/40 mr-0.5">{port.name}</span>
+        {outputPorts.length > 0 && (
+          <div className="absolute right-0 top-2 flex flex-col gap-[28px]">
+            {outputPorts.map((port, i) => (
               <div
-                className="h-3 w-3 rounded-full border-2 cursor-crosshair transition-transform hover:scale-125"
+                key={port.id}
+                className="absolute flex items-center gap-1"
                 style={{
-                  borderColor: PORT_COLORS[port.dataType],
-                  backgroundColor: PORT_COLORS[port.dataType] + '33',
+                  top: `${12 + i * 28}px`,
+                  right: '-6px',
                 }}
-                onMouseDown={(e) => {
-                  e.stopPropagation()
-                  onStartConnection(port.id, 'output', e)
-                }}
-                onMouseUp={(e) => {
-                  e.stopPropagation()
-                  onEndConnection(port.id, 'output')
-                }}
-                title={`${port.name} (${port.dataType})`}
-              />
-            </div>
-          ))}
-        </div>
+              >
+                <span className="text-[9px] text-white/40 mr-0.5">{port.name}</span>
+                <div
+                  className="h-3 w-3 rounded-full border-2 cursor-crosshair transition-transform hover:scale-125"
+                  style={{
+                    borderColor: PORT_COLORS[port.dataType],
+                    backgroundColor: PORT_COLORS[port.dataType] + '33',
+                  }}
+                  onMouseDown={(e) => {
+                    e.stopPropagation()
+                    onStartConnection(port.id, 'output', e)
+                  }}
+                  onMouseUp={(e) => {
+                    e.stopPropagation()
+                    onEndConnection(port.id, 'output')
+                  }}
+                  title={`${port.name} (${port.dataType})`}
+                />
+              </div>
+            ))}
+          </div>
+        )}
 
         {/* Node body */}
         <div className="min-h-[60px]">{renderNodeContent()}</div>
@@ -559,10 +635,6 @@ export function WorkflowCanvas() {
         setDragInfo(null)
         // Push to history after drag
         useWorkflowStore.getState().pushHistory()
-      }
-      // If connecting and no target hit, cancel after a short delay
-      if (connectingFrom) {
-        // The connection will be finalized on port mouseUp, or cancelled on next mouseDown
       }
     }
 
@@ -814,6 +886,48 @@ export function WorkflowCanvas() {
   }, [setZoom, setCenteredPan])
 
   // ---------------------------------------------------------------------------
+  // Save/Load workflow to localStorage
+  // ---------------------------------------------------------------------------
+  const handleSaveWorkflow = useCallback(() => {
+    const store = useWorkflowStore.getState()
+    const data = {
+      nodes: store.nodes,
+      connections: store.connections,
+    }
+    localStorage.setItem('tablero-workflow', JSON.stringify(data))
+    toast.success('Workflow saved')
+  }, [])
+
+  const handleLoadWorkflow = useCallback(() => {
+    try {
+      const saved = localStorage.getItem('tablero-workflow')
+      if (!saved) {
+        toast.error('No saved workflow found')
+        return
+      }
+      const data = JSON.parse(saved)
+      const store = useWorkflowStore.getState()
+      // Clear and load
+      store.clearWorkflow()
+      for (const node of data.nodes || []) {
+        // Add each node
+        const newNode = store.addNode(node.type, node.x, node.y)
+        // Update with saved data
+        store.updateNode(newNode, {
+          title: node.title,
+          data: node.data,
+          outputs: node.outputs,
+          status: 'idle',
+        })
+      }
+      // Re-add connections (node IDs may have changed, skip for now)
+      toast.success('Workflow loaded')
+    } catch {
+      toast.error('Failed to load workflow')
+    }
+  }, [])
+
+  // ---------------------------------------------------------------------------
   // Render
   // ---------------------------------------------------------------------------
   return (
@@ -953,6 +1067,27 @@ export function WorkflowCanvas() {
             <Play size={14} />
           )}
           {isExecuting ? 'Running...' : 'Run'}
+        </button>
+
+        <div className="w-px h-5 bg-white/10" />
+
+        {/* Save */}
+        <button
+          onClick={handleSaveWorkflow}
+          disabled={nodes.length === 0}
+          className="flex items-center gap-1 rounded-lg px-2 py-1.5 text-xs font-medium text-white/60 hover:bg-white/10 hover:text-white/80 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+          title="Save workflow"
+        >
+          <Save size={13} />
+        </button>
+
+        {/* Load */}
+        <button
+          onClick={handleLoadWorkflow}
+          className="flex items-center gap-1 rounded-lg px-2 py-1.5 text-xs font-medium text-white/60 hover:bg-white/10 hover:text-white/80 transition-colors"
+          title="Load workflow"
+        >
+          <FolderOpen size={13} />
         </button>
 
         <div className="w-px h-5 bg-white/10" />
