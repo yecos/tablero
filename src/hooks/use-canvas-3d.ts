@@ -105,7 +105,8 @@ export function useCanvas3D(params: UseCanvas3DParams): UseCanvas3DReturn {
       }
     } catch (error) {
       console.error('3D generation failed:', error)
-      toast.error('Failed to generate 3D model. Try again.', { id: 'gen-3d' })
+      const message = error instanceof Error ? error.message : 'Error desconocido'
+      toast.error(`Error al generar modelo 3D: ${message}`, { id: 'gen-3d' })
       updateElement(elementId, { isGenerating3D: false })
     } finally {
       setConverting3DId(null)

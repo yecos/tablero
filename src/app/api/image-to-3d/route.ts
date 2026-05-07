@@ -5,7 +5,7 @@ export const maxDuration = 120
 export const dynamic = 'force-dynamic'
 
 interface GradioFileData {
-  url: string
+  url?: string
   path?: string
   meta?: { _type: string }
   orig_name?: string
@@ -13,13 +13,43 @@ interface GradioFileData {
   is_stream?: boolean
 }
 
+// Gradio v2.2 wraps file data in a { value: ... } structure
+interface GradioValueWrapper {
+  value?: GradioFileData | string
+  _type?: string
+}
+
+/**
+ * Extract a file URL from Gradio v2.2 response data.
+ * Gradio v2.2 returns files as: { value: { url: "...", ... }, _type: "..." }
+ * Older formats may return: { url: "...", ... } directly
+ */
+function extractFileUrl(item: unknown): string | null {
+  if (typeof item === 'string') return item
+  if (typeof item !== 'object' || item === null) return null
+
+  const obj = item as Record<string, unknown>
+
+  // Gradio v2.2 nested format: { value: { url: "..." } }
+  if (obj.value && typeof obj.value === 'object' && obj.value !== null) {
+    const inner = obj.value as Record<string, unknown>
+    if (typeof inner.url === 'string') return inner.url
+  }
+
+  // Direct format: { url: "..." }
+  if (typeof obj.url === 'string') return obj.url
+
+  // Value might be a plain URL string
+  if (typeof obj.value === 'string' && obj.value.startsWith('http')) return obj.value
+
+  return null
+}
+
 async function callHunyuan3D(imageBase64: string): Promise<string | null> {
   try {
     console.log('[image-to-3d] Connecting to Hunyuan3D-2 space...')
 
-    const client = await Client.connect('tencent/Hunyuan3D-2', {
-      timeout: 120_000,
-    })
+    const client = await Client.connect('tencent/Hunyuan3D-2')
 
     console.log('[image-to-3d] Connected. Submitting image for 3D generation...')
 
@@ -27,24 +57,63 @@ async function callHunyuan3D(imageBase64: string): Promise<string | null> {
     const base64Data = imageBase64.replace(/^data:image\/\w+;base64,/, '')
     const buffer = Buffer.from(base64Data, 'base64')
 
-    const result = await client.predict('/image_to_3d', {
-      image: buffer,
-    })
+    // Try /generation_all first (geometry + texture), fallback to /shape_generation (geometry only)
+    const endpoints = ['/generation_all', '/shape_generation']
+    let result: Awaited<ReturnType<typeof client.predict>> | null = null
 
-    console.log('[image-to-3d] Got result from Hunyuan3D:', JSON.stringify(result.data).slice(0, 200))
+    for (const endpoint of endpoints) {
+      try {
+        console.log(`[image-to-3d] Trying endpoint: ${endpoint}`)
+        result = await client.predict(endpoint, {
+          image: buffer,
+        })
+        console.log(`[image-to-3d] Endpoint ${endpoint} succeeded`)
+        break
+      } catch (endpointErr) {
+        console.warn(`[image-to-3d] Endpoint ${endpoint} failed:`, endpointErr)
+        continue
+      }
+    }
 
-    // Extract the GLB file from the result
+    if (!result) {
+      console.error('[image-to-3d] All endpoints failed')
+      return null
+    }
+
+    console.log('[image-to-3d] Got result from Hunyuan3D:', JSON.stringify(result.data).slice(0, 500))
+
+    // Extract the GLB file URL from the result using robust parsing
     if (result.data && Array.isArray(result.data)) {
       for (const item of result.data) {
-        if (typeof item === 'object' && item !== null) {
-          const fileData = item as GradioFileData
-          if (fileData.url) {
-            // Fetch the GLB file from the Gradio URL
-            console.log('[image-to-3d] Fetching GLB from URL:', fileData.url)
-            const glbResponse = await fetch(fileData.url)
+        const fileUrl = extractFileUrl(item)
+        if (fileUrl) {
+          console.log('[image-to-3d] Found GLB URL:', fileUrl)
+          // Use client.fetch() to download with proper session cookies
+          // HuggingFace Spaces require auth cookies for file downloads
+          try {
+            const glbResponse = await client.fetch(fileUrl)
             if (glbResponse.ok) {
               const glbBuffer = Buffer.from(await glbResponse.arrayBuffer())
-              return glbBuffer.toString('base64')
+              const magic = glbBuffer.slice(0, 4).toString('ascii')
+              if (magic === 'glTF') {
+                console.log('[image-to-3d] Valid GLB file downloaded, size:', (glbBuffer.length / 1024).toFixed(1), 'KB')
+                return glbBuffer.toString('base64')
+              } else {
+                console.warn('[image-to-3d] Downloaded file is not a valid GLB (magic:', magic, ')')
+              }
+            } else {
+              console.warn('[image-to-3d] Failed to fetch GLB:', glbResponse.status, glbResponse.statusText)
+            }
+          } catch (fetchErr) {
+            console.warn('[image-to-3d] Error fetching GLB with client.fetch, trying raw fetch:', fetchErr)
+            // Fallback to raw fetch
+            const glbResponse = await fetch(fileUrl)
+            if (glbResponse.ok) {
+              const glbBuffer = Buffer.from(await glbResponse.arrayBuffer())
+              const magic = glbBuffer.slice(0, 4).toString('ascii')
+              if (magic === 'glTF') {
+                return glbBuffer.toString('base64')
+              }
             }
           }
         }

@@ -118,13 +118,13 @@ export async function executeNode(
         const temperature = (node.data.temperature as number) ?? 0.7
         const maxTokens = (node.data.maxTokens as number) ?? 500
 
-        const messages = [
-          { role: 'system' as const, content: systemPrompt },
+        const messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }> = [
+          { role: 'system', content: systemPrompt },
         ]
         if (contextText) {
-          messages.push({ role: 'user' as const, content: contextText })
+          messages.push({ role: 'user', content: contextText })
         }
-        messages.push({ role: 'user' as const, content: prompt })
+        messages.push({ role: 'user', content: prompt })
 
         const res = await fetch('/api/chat', {
           method: 'POST',
@@ -210,10 +210,14 @@ export async function executeNode(
         const imageValue =
           imageInput?.dataType === 'image' ? String(imageInput.value) : ''
 
+        if (!imageValue) {
+          throw new Error('No image input provided for 3D generation')
+        }
+
         const res = await fetch('/api/image-to-3d', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ image: imageValue }),
+          body: JSON.stringify({ imageBase64: imageValue }),
         })
 
         if (!res.ok) {
@@ -222,8 +226,16 @@ export async function executeNode(
         }
 
         const data = await res.json()
+        // API returns { success, modelData (base64 GLB), fallback }
+        const modelValue = data.modelData
+          ? `data:model/gltf-binary;base64,${data.modelData}`
+          : data.modelUrl ?? data
         outputs = {
-          output_1_model3d: { dataType: 'model3d', value: data.modelUrl ?? data },
+          output_1_model3d: {
+            dataType: 'model3d',
+            value: modelValue,
+            meta: { fallback: data.fallback ?? false },
+          },
         }
         break
       }

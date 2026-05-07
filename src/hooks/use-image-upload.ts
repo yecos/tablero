@@ -53,8 +53,8 @@ export interface UseImageUploadParams {
 }
 
 export interface UseImageUploadReturn {
-  fileInputRef: React.RefObject<HTMLInputElement>
-  fileInput3DRef: React.RefObject<HTMLInputElement>
+  fileInputRef: React.RefObject<HTMLInputElement | null>
+  fileInput3DRef: React.RefObject<HTMLInputElement | null>
   addImageFileToCanvas: (file: File, dropX?: number, dropY?: number, as3D?: boolean) => void
   handleImageUpload: (e: React.ChangeEvent<HTMLInputElement>) => void
   handle3DUpload: (e: React.ChangeEvent<HTMLInputElement>) => void
@@ -139,9 +139,10 @@ export function useImageUpload(params: UseImageUploadParams): UseImageUploadRetu
                 }
               }
             })
-            .catch(() => {
+            .catch((err) => {
               updateElement(newElement.id, { isGenerating3D: false })
-              toast.error('3D generation failed', { id: 'gen-3d' })
+              const message = err instanceof Error ? err.message : 'Error desconocido'
+              toast.error(`Error en generación 3D: ${message}`, { id: 'gen-3d' })
             })
         } else {
           addElement({

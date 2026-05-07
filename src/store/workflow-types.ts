@@ -39,6 +39,7 @@ export interface WorkflowNode {
 export interface PortDataValue {
   dataType: PortDataType
   value: unknown
+  meta?: Record<string, unknown>
 }
 
 export interface WorkflowConnection {
