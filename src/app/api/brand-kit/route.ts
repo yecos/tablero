@@ -12,15 +12,28 @@ async function getZAI() {
 
 export async function POST(request: NextRequest) {
   try {
-    const { description } = await request.json()
+    const body = await request.json()
 
-    if (!description || typeof description !== 'string') {
-      return NextResponse.json({ error: 'Brand description is required' }, { status: 400 })
+    // Support two formats:
+    // Format 1 (Direct): { description }
+    // Format 2 (Workflow engine): { prompt, industry }
+    let description: string
+    let industry: string = ''
+
+    if (body.description) {
+      description = body.description
+      industry = body.industry || ''
+    } else if (body.prompt) {
+      description = body.prompt
+      industry = body.industry || ''
+    } else {
+      return NextResponse.json({ error: 'Brand description or prompt is required' }, { status: 400 })
     }
 
     const zai = await getZAI()
 
-    const prompt = `Generate a complete brand kit for the following brand: "${description}"
+    const contextStr = industry ? ` in the ${industry} industry` : ''
+    const prompt = `Generate a complete brand kit for the following brand${contextStr}: "${description}"
 
 Return a JSON object with exactly this structure (no markdown, no extra text, just pure JSON):
 {
@@ -92,7 +105,15 @@ Make sure all hex colors are valid and visually cohesive. The fonts should be re
       }
     }
 
-    return NextResponse.json({ brandKit })
+    // Return in format that works for both direct use and workflow engine
+    // Workflow engine expects the data directly accessible
+    return NextResponse.json({
+      brandKit,
+      // Also expose color arrays for easy workflow consumption
+      colors: brandKit.colors ? Object.values(brandKit.colors) : [],
+      fonts: brandKit.fonts ? [brandKit.fonts.heading, brandKit.fonts.body] : [],
+      tagline: brandKit.tagline || '',
+    })
   } catch (error) {
     console.error('Brand kit API error:', error)
     return NextResponse.json(

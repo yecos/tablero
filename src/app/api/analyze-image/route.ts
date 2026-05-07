@@ -82,6 +82,7 @@ export async function POST(request: NextRequest) {
 
   try {
     let imgSource: string | null = null
+    let mode: string = 'analyze'
     const contentType = request.headers.get('content-type') || ''
 
     if (contentType.includes('multipart/form-data')) {
@@ -90,6 +91,7 @@ export async function POST(request: NextRequest) {
       const formData = await request.formData()
       const imageFile = formData.get('image') as File | null
       const imageUrl = formData.get('imageUrl') as string | null
+      mode = (formData.get('mode') as string) || 'analyze'
 
       if (imageFile) {
         const sizeMB = imageFile.size / (1024 * 1024)
@@ -111,7 +113,10 @@ export async function POST(request: NextRequest) {
         imgSource = imageUrl
       }
     } else {
-      // Handle JSON body (backward compatibility)
+      // Handle JSON body - supports multiple formats:
+      // Format 1 (Direct): { imageBase64, imageUrl }
+      // Format 2 (Workflow engine): { image, mode }
+      // Format 3 (Legacy): { imageBase64, imageUrl, mode }
       let body
       try {
         body = await request.json()
@@ -119,9 +124,22 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'Invalid request body' }, { status: 400 })
       }
 
-      const { imageBase64, imageUrl } = body
+      mode = body.mode || 'analyze'
 
-      if (imageBase64) {
+      const imageBase64 = body.imageBase64
+      const imageUrl = body.imageUrl
+      const imageStr = body.image  // Workflow engine sends the image as 'image' field
+
+      if (imageStr) {
+        // Workflow engine format: image is a URL or base64 string
+        if (imageStr.startsWith('http')) {
+          imgSource = imageStr
+        } else if (imageStr.startsWith('data:')) {
+          imgSource = imageStr
+        } else {
+          imgSource = `data:image/jpeg;base64,${imageStr}`
+        }
+      } else if (imageBase64) {
         const sizeMB = (imageBase64.length * 0.75) / (1024 * 1024)
         console.log(`[analyze-image] Base64 payload size: ${sizeMB.toFixed(2)} MB`)
 
@@ -213,9 +231,16 @@ export async function POST(request: NextRequest) {
 
     console.log('[analyze-image] Analysis complete, found', analysis.elements?.length || 0, 'elements and', analysis.textElements?.length || 0, 'text elements')
 
+    // Return in format that works for both direct use and workflow engine
+    // Workflow engine looks for: data.layers or just data
     return NextResponse.json({
       success: true,
       analysis,
+      layers: analysis.elements?.map((el: { id?: string; name?: string; type?: string }) => ({
+        id: el.id,
+        name: el.name,
+        type: el.type,
+      })) || [],
       rawAnalysis: isFallback ? content : '',
       fallback: isFallback
     })

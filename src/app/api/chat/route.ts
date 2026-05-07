@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import ZAI from 'z-ai-web-dev-sdk'
 
-const SYSTEM_PROMPT = `You are DesignAI, the world's most advanced AI design agent. You help users create professional designs through conversation.
+const SYSTEM_PROMPT = `You are DesignAI, the world's most advanced AI design assistant. You help users create professional designs through conversation.
 
 Your capabilities:
 - Create logos, posters, social media graphics, brand identities, and more
@@ -9,11 +9,12 @@ Your capabilities:
 - Generate design concepts and iterate on feedback
 - Provide design tips and best practices
 - Recommend specific design parameters (colors, fonts, sizes, layouts)
+- Generate detailed image prompts for AI image generation
 
 When a user asks you to create something:
 1. Acknowledge their request enthusiastically
 2. Describe the design concept you'll create
-3. If they want an image generated, suggest they use the "Generate Image" feature or offer to guide them
+3. If they want an image generated, craft a detailed image generation prompt
 4. Provide specific design details (colors, fonts, layout suggestions)
 5. Be creative and professional
 
@@ -33,34 +34,66 @@ async function getZAI() {
   return zaiInstance
 }
 
+interface ChatMessage {
+  role: 'system' | 'user' | 'assistant'
+  content: string
+}
+
 export async function POST(request: NextRequest) {
   try {
-    const { message, history } = await request.json()
+    const body = await request.json()
 
-    if (!message || typeof message !== 'string') {
-      return NextResponse.json({ error: 'Message is required' }, { status: 400 })
+    let messages: ChatMessage[]
+    let temperature: number = 0.8
+    let maxTokens: number = 1024
+
+    // Support two formats:
+    // Format 1 (Chat sidebar): { message, history }
+    // Format 2 (Workflow engine): { messages, temperature?, maxTokens? }
+
+    if (body.messages && Array.isArray(body.messages)) {
+      // Workflow engine format - use messages array directly
+      messages = body.messages.map((msg: { role: string; content: string }) => ({
+        role: msg.role as 'system' | 'user' | 'assistant',
+        content: msg.content,
+      }))
+      temperature = body.temperature ?? 0.8
+      maxTokens = body.maxTokens ?? 1024
+    } else if (body.message) {
+      // Chat sidebar format - convert to messages array
+      const history: Array<{ role: string; content: string }> = body.history || []
+      messages = [
+        { role: 'system' as const, content: SYSTEM_PROMPT },
+        ...history.map((msg) => ({
+          role: msg.role as 'user' | 'assistant',
+          content: msg.content,
+        })),
+        { role: 'user' as const, content: body.message },
+      ]
+    } else {
+      return NextResponse.json({ error: 'Message or messages array is required' }, { status: 400 })
+    }
+
+    // Ensure system prompt is present
+    if (!messages.some((m) => m.role === 'system')) {
+      messages = [{ role: 'system', content: SYSTEM_PROMPT }, ...messages]
     }
 
     const zai = await getZAI()
 
-    const messages = [
-      { role: 'system' as const, content: SYSTEM_PROMPT },
-      ...(history || []).map((msg: { role: string; content: string }) => ({
-        role: msg.role as 'user' | 'assistant',
-        content: msg.content,
-      })),
-      { role: 'user' as const, content: message },
-    ]
-
     const response = await zai.chat.completions.create({
       messages,
-      max_tokens: 1024,
-      temperature: 0.8,
+      max_tokens: maxTokens,
+      temperature,
     })
 
-    const reply = response.choices?.[0]?.message?.content || 'I apologize, I could not generate a response. Please try again.'
+    const content = response.choices?.[0]?.message?.content || 'I apologize, I could not generate a response. Please try again.'
 
-    return NextResponse.json({ reply })
+    // Return in a format that works for both chat sidebar and workflow engine
+    return NextResponse.json({
+      reply: content,     // Chat sidebar uses this
+      content: content,   // Workflow engine uses this
+    })
   } catch (error) {
     console.error('Chat API error:', error)
     return NextResponse.json(

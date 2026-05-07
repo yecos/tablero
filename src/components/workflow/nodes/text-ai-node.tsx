@@ -16,7 +16,7 @@ export function TextAINode({ node, onDataChange }: TextAINodeProps) {
   const prompt = (node.data.prompt as string) || ''
   const systemPrompt = (node.data.systemPrompt as string) || ''
   const temperature = (node.data.temperature as number) ?? 0.7
-  const outputText = node.outputs['output_0_text']?.value as string | undefined
+  const outputText = node.outputs['output_1_text']?.value as string | undefined
 
   return (
     <div className="flex flex-col gap-2">

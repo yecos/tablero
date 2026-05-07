@@ -22,12 +22,13 @@ const MODE_OPTIONS: ImageEditNodeData['mode'][] = ['analyze', 'split']
 
 export function ImageEditNode({ node, onDataChange }: ImageEditNodeProps) {
   const mode = (node.data.mode as ImageEditNodeData['mode']) || 'analyze'
-  const layers = node.outputs['output_1_imageLayers']?.value as
-    | Array<{ name: string; type: string }>
-    | undefined
-  const analysisResult = node.outputs['output_0_image']?.value as
-    | Record<string, unknown>
-    | undefined
+  const outputValue = node.outputs['output_1_imageLayers']?.value
+  const layers = Array.isArray(outputValue)
+    ? (outputValue as Array<{ name: string; type: string }>)
+    : undefined
+  const analysisResult = (typeof outputValue === 'object' && outputValue !== null && !Array.isArray(outputValue))
+    ? (outputValue as Record<string, unknown>)
+    : undefined
 
   return (
     <div className="flex flex-col gap-2">
@@ -61,18 +62,25 @@ export function ImageEditNode({ node, onDataChange }: ImageEditNodeProps) {
         </Select>
       </div>
 
-      {mode === 'analyze' && node.status === 'completed' && analysisResult && (
+      {mode === 'analyze' && node.status === 'completed' && (analysisResult || layers) && (
         <div className="flex flex-col gap-1">
           <Label className="text-[10px] uppercase tracking-wider text-slate-400">
             Analysis
           </Label>
           <ScrollArea className="max-h-[80px] rounded-md bg-white/5 p-2">
             <div className="text-xs text-slate-300 space-y-1">
-              {typeof analysisResult === 'object' && analysisResult !== null ? (
+              {analysisResult && typeof analysisResult === 'object' ? (
                 Object.entries(analysisResult).map(([key, value]) => (
                   <div key={key} className="flex gap-1">
                     <span className="text-amber-400/80">{key}:</span>
                     <span className="text-slate-400">{String(value)}</span>
+                  </div>
+                ))
+              ) : layers && layers.length > 0 ? (
+                layers.map((layer, i) => (
+                  <div key={i} className="flex gap-1">
+                    <span className="text-amber-400/80">{layer.name}:</span>
+                    <span className="text-slate-400">{layer.type}</span>
                   </div>
                 ))
               ) : (
