@@ -142,7 +142,7 @@ export function AINode({
         {hasPrompt && (
           <textarea
             value={node.config.prompt || ''}
-            onChange={(e) => onConfigChange(node.id, { ...node.config, prompt: e.target.value })}
+            onChange={(e) => { onConfigChange(node.id, { ...node.config, prompt: e.target.value }) }}
             placeholder={isImageGen ? 'Imagen que quieres generar...' : isVideoGen ? 'Describe el video que quieres generar...' : 'Escribe tu mensaje...'}
             className="w-full bg-white/5 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-white placeholder:text-white/20 focus:outline-none focus:border-blue-500/50 resize-none h-16"
             onClick={(e) => e.stopPropagation()}
@@ -192,6 +192,13 @@ export function AINode({
               <><Play className="w-3 h-3" /> Generar</>
             )}
           </button>
+        )}
+
+        {/* Error message */}
+        {node.status === 'error' && node.error && (
+          <div className="rounded-lg bg-red-500/10 border border-red-500/20 p-2 text-[10px] text-red-400 leading-relaxed">
+            {node.error}
+          </div>
         )}
 
         {/* Result preview */}

@@ -1,5 +1,6 @@
 'use client';
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import SpaceCard from './SpaceCard';
 
 interface Space { id: string; name: string; description?: string; icon?: string; color?: string; designs?: any[] }
@@ -10,20 +11,49 @@ export default function SpaceDashboard() {
   const [showNew, setShowNew] = useState(false);
   const [newName, setNewName] = useState('');
   const [newDesc, setNewDesc] = useState('');
+  const [creating, setCreating] = useState(false);
+  const [error, setError] = useState('');
+  const router = useRouter();
 
   useEffect(() => {
-    fetch('/api/spaces').then(r => r.json()).then(data => { setSpaces(data); setLoading(false); }).catch(() => setLoading(false));
+    fetch('/api/spaces')
+      .then(r => r.json())
+      .then(data => { setSpaces(Array.isArray(data) ? data : []); setLoading(false); })
+      .catch(() => { setLoading(false); });
   }, []);
 
   const createSpace = async () => {
     if (!newName.trim()) return;
-    const res = await fetch('/api/spaces', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: newName, description: newDesc }) });
-    const space = await res.json();
-    setSpaces([space, ...spaces]);
-    setShowNew(false); setNewName(''); setNewDesc('');
+    setCreating(true);
+    setError('');
+    try {
+      const res = await fetch('/api/spaces', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: newName, description: newDesc })
+      });
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        setError(errData.error || 'Error al crear el espacio');
+        setCreating(false);
+        return;
+      }
+
+      const space = await res.json();
+      // Navigate to the new space
+      router.push(`/spaces/${space.id}`);
+    } catch (err) {
+      setError('Error de conexión al crear el espacio');
+      setCreating(false);
+    }
   };
 
-  if (loading) return <div className="flex items-center justify-center min-h-screen"><div className="animate-spin h-8 w-8 border-2 border-purple-500 border-t-transparent rounded-full" /></div>;
+  if (loading) return (
+    <div className="flex items-center justify-center min-h-screen bg-[#0a0a0f]">
+      <div className="animate-spin h-8 w-8 border-2 border-purple-500 border-t-transparent rounded-full" />
+    </div>
+  );
 
   return (
     <div className="min-h-screen bg-[#0a0a0f] text-white">
@@ -37,11 +67,36 @@ export default function SpaceDashboard() {
         </div>
         {showNew && (
           <div className="mb-8 rounded-2xl border border-white/10 bg-white/5 p-6">
-            <input type="text" placeholder="Nombre del espacio" value={newName} onChange={e => setNewName(e.target.value)} className="w-full rounded-lg bg-white/10 px-4 py-3 text-white placeholder-white/30 outline-none focus:ring-2 focus:ring-purple-500 mb-3" />
-            <textarea placeholder="Descripción (opcional)" value={newDesc} onChange={e => setNewDesc(e.target.value)} className="w-full rounded-lg bg-white/10 px-4 py-3 text-white placeholder-white/30 outline-none focus:ring-2 focus:ring-purple-500 mb-3 resize-none" rows={2} />
+            <input
+              type="text"
+              placeholder="Nombre del espacio"
+              value={newName}
+              onChange={e => setNewName(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && createSpace()}
+              autoFocus
+              className="w-full rounded-lg bg-white/10 px-4 py-3 text-white placeholder-white/30 outline-none focus:ring-2 focus:ring-purple-500 mb-3"
+            />
+            <textarea
+              placeholder="Descripción (opcional)"
+              value={newDesc}
+              onChange={e => setNewDesc(e.target.value)}
+              className="w-full rounded-lg bg-white/10 px-4 py-3 text-white placeholder-white/30 outline-none focus:ring-2 focus:ring-purple-500 mb-3 resize-none"
+              rows={2}
+            />
+            {error && (
+              <div className="mb-3 rounded-lg bg-red-500/10 border border-red-500/20 px-4 py-2 text-sm text-red-400">
+                {error}
+              </div>
+            )}
             <div className="flex gap-3">
-              <button onClick={createSpace} className="rounded-lg bg-purple-600 px-4 py-2 text-sm hover:bg-purple-500">Crear</button>
-              <button onClick={() => setShowNew(false)} className="rounded-lg bg-white/10 px-4 py-2 text-sm hover:bg-white/20">Cancelar</button>
+              <button
+                onClick={createSpace}
+                disabled={creating || !newName.trim()}
+                className="rounded-lg bg-purple-600 px-4 py-2 text-sm hover:bg-purple-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                {creating ? 'Creando...' : 'Crear'}
+              </button>
+              <button onClick={() => { setShowNew(false); setError(''); }} className="rounded-lg bg-white/10 px-4 py-2 text-sm hover:bg-white/20">Cancelar</button>
             </div>
           </div>
         )}
@@ -49,7 +104,12 @@ export default function SpaceDashboard() {
           {spaces.map(space => <SpaceCard key={space.id} id={space.id} name={space.name} description={space.description} icon={space.icon} color={space.color} designCount={space.designs?.length || 0} />)}
         </div>
         {spaces.length === 0 && !showNew && (
-          <div className="text-center py-20"><p className="text-6xl mb-4">🎨</p><h3 className="text-xl font-semibold mb-2">Crea tu primer espacio</h3><p className="text-white/50 mb-6">Los espacios organizan tus proyectos creativos</p><button onClick={() => setShowNew(true)} className="rounded-xl bg-purple-600 px-6 py-3 font-medium hover:bg-purple-500">Crear Espacio</button></div>
+          <div className="text-center py-20">
+            <p className="text-6xl mb-4">🎨</p>
+            <h3 className="text-xl font-semibold mb-2">Crea tu primer espacio</h3>
+            <p className="text-white/50 mb-6">Los espacios organizan tus proyectos creativos</p>
+            <button onClick={() => setShowNew(true)} className="rounded-xl bg-purple-600 px-6 py-3 font-medium hover:bg-purple-500">Crear Espacio</button>
+          </div>
         )}
       </div>
     </div>

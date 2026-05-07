@@ -115,7 +115,7 @@ export function AICanvas({ spaceId, spaceName, initialNodes, initialConnections,
 
       const prompt = node.config.prompt || node.config.text || inputText || ''
       if (!prompt && !inputImage) {
-        setNodes(prev => prev.map(n => n.id === id ? { ...n, status: 'error' as const } : n))
+        setNodes(prev => prev.map(n => n.id === id ? { ...n, status: 'error' as const, error: 'Escribe un prompt primero' } : n))
         return
       }
 
@@ -133,7 +133,7 @@ export function AICanvas({ spaceId, spaceName, initialNodes, initialConnections,
       const endpoint = endpointMap[mode]
 
       if (!endpoint) {
-        setNodes(prev => prev.map(n => n.id === id ? { ...n, status: 'error' as const } : n))
+        setNodes(prev => prev.map(n => n.id === id ? { ...n, status: 'error' as const, error: 'Tipo de nodo no soportado' } : n))
         return
       }
 
@@ -162,13 +162,15 @@ export function AICanvas({ spaceId, spaceName, initialNodes, initialConnections,
             url: data.data.url,
             text: data.data.text,
           },
+          error: undefined,
         } : n))
       } else {
-        setNodes(prev => prev.map(n => n.id === id ? { ...n, status: 'error' as const } : n))
+        const errorMsg = data.error || 'Error al generar. Verifica que las API keys estén configuradas en Vercel.'
+        setNodes(prev => prev.map(n => n.id === id ? { ...n, status: 'error' as const, error: errorMsg } : n))
       }
     } catch (error) {
       console.error('Node execution error:', error)
-      setNodes(prev => prev.map(n => n.id === id ? { ...n, status: 'error' as const } : n))
+      setNodes(prev => prev.map(n => n.id === id ? { ...n, status: 'error' as const, error: 'Error de conexión con el servidor' } : n))
     }
   }, [nodes, connections, spaceId])
 

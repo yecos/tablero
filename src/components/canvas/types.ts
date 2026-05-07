@@ -19,6 +19,7 @@ export interface CanvasNode {
   outputs: NodePort[]
   config: Record<string, any>
   result?: any
+  error?: string
   status: 'idle' | 'running' | 'completed' | 'error'
 }
 
