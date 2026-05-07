@@ -68,7 +68,8 @@ export async function POST(request: NextRequest) {
     }
 
     // Use the provider system with automatic fallback
-    const result = await generateText(messages, { temperature, maxTokens })
+    const provider = body.provider as string | undefined
+    const result = await generateText(messages, { temperature, maxTokens }, provider)
 
     // Return in a format that works for both chat sidebar and workflow engine
     return NextResponse.json({

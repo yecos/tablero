@@ -3,6 +3,7 @@
 import React from 'react'
 import { PenTool } from 'lucide-react'
 import type { WorkflowNode } from '@/store/workflow-types'
+import { ProviderSelector } from '@/components/ui/provider-selector'
 
 interface SvgVectorizeNodeProps {
   node: WorkflowNode
@@ -24,6 +25,7 @@ export function SvgVectorizeNode({ node }: SvgVectorizeNodeProps) {
           <div className="text-[9px] text-white/50">SVG ready ({String(node.outputs.output_1_text.value).length} chars)</div>
         </div>
       ) : null}
+      <ProviderSelector category="vectorize" compact />
     </div>
   )
 }

@@ -11,6 +11,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { ProviderSelector } from '@/components/ui/provider-selector'
 
 interface ImageGenNodeProps {
   node: WorkflowNode
@@ -122,6 +123,8 @@ export function ImageGenNode({ node, onDataChange }: ImageGenNodeProps) {
           <span className="text-[10px] text-emerald-400">Image generated</span>
         </div>
       )}
+
+      <ProviderSelector category="image-gen" compact />
     </div>
   )
 }

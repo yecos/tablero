@@ -4,6 +4,7 @@ import React from 'react'
 import type { WorkflowNode } from '@/store/workflow-types'
 import { Label } from '@/components/ui/label'
 import { Box, Loader2, ImageIcon } from 'lucide-react'
+import { ProviderSelector } from '@/components/ui/provider-selector'
 
 interface ThreedGenNodeProps {
   node: WorkflowNode
@@ -88,6 +89,8 @@ export function ThreedGenNode({ node }: ThreedGenNodeProps) {
           </span>
         </div>
       )}
+
+      <ProviderSelector category="3d" compact />
     </div>
   )
 }

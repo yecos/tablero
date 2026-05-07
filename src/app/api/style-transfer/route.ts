@@ -3,7 +3,7 @@ import { transferStyle } from '@/lib/ai-providers'
 
 export async function POST(request: NextRequest) {
   try {
-    const { imageBase64, imageUrl, stylePrompt } = await request.json()
+    const { imageBase64, imageUrl, stylePrompt, provider } = await request.json()
 
     if (!stylePrompt || typeof stylePrompt !== 'string') {
       return NextResponse.json({ error: 'stylePrompt is required' }, { status: 400 })
@@ -30,7 +30,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Image data is required (imageBase64 or imageUrl)' }, { status: 400 })
     }
 
-    const result = await transferStyle(imgSource, stylePrompt)
+    const result = await transferStyle(imgSource, stylePrompt, provider as string | undefined)
 
     return NextResponse.json({
       success: true,

@@ -109,6 +109,53 @@ export interface VisionProvider {
   analyze: (imageUrl: string, prompt: string, options?: { maxTokens?: number }) => Promise<VisionResult>
 }
 
+/** Result of an image-to-image transformation call */
+export interface ImageToImageResult {
+  /** base64-encoded or URL of the transformed image */
+  image: string
+  isBase64: boolean
+  provider: string
+  model?: string
+}
+
+/** Result of an upscaling call */
+export interface UpscaleResult {
+  /** base64-encoded or URL of the upscaled image */
+  image: string
+  isBase64: boolean
+  provider: string
+  scale?: number
+}
+
+/** Result of an inpainting/outpainting call */
+export interface InpaintResult {
+  /** base64-encoded or URL of the inpainted image */
+  image: string
+  isBase64: boolean
+  provider: string
+}
+
+export interface ImageToImageProvider {
+  name: string
+  isAvailable: () => boolean
+  /** Transform an image using a text prompt as guidance */
+  transform: (imageBase64: string, prompt: string, options?: { strength?: number; negativePrompt?: string }) => Promise<ImageToImageResult>
+}
+
+export interface UpscaleProvider {
+  name: string
+  isAvailable: () => boolean
+  /** Upscale an image to a higher resolution */
+  upscale: (imageBase64: string, options?: { scale?: number }) => Promise<UpscaleResult>
+}
+
+export interface InpaintProvider {
+  name: string
+  isAvailable: () => boolean
+  /** Inpaint/outpaint an image */
+  inpaint: (imageBase64: string, maskBase64: string, prompt: string, options?: { direction?: string }) => Promise<InpaintResult>
+}
+
 // ---------------------------------------------------------------------------
 // Generic fallback runner
 // ---------------------------------------------------------------------------

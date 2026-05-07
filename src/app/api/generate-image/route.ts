@@ -3,14 +3,14 @@ import { generateImage } from '@/lib/ai-providers'
 
 export async function POST(request: NextRequest) {
   try {
-    const { prompt, negativePrompt, size = '1024x1024', style = 'vivid' } = await request.json()
+    const { prompt, negativePrompt, size = '1024x1024', style = 'vivid', provider } = await request.json()
 
     if (!prompt || typeof prompt !== 'string') {
       return NextResponse.json({ error: 'Prompt is required' }, { status: 400 })
     }
 
     // Use the provider system with automatic fallback
-    const result = await generateImage(prompt, { size, negativePrompt, style })
+    const result = await generateImage(prompt, { size, negativePrompt, style }, provider as string | undefined)
 
     // Build the image URL or data URL
     let imageUrl: string | null = null

@@ -4,6 +4,16 @@ import {
   type PortDataValue,
 } from '@/store/workflow-types'
 import { useWorkflowStore, type WorkflowState } from '@/store/workflow-store'
+import { useProviderStore, type ProviderCategory } from '@/store/provider-store'
+
+// Helper: get selected provider for a category from the provider store
+function getProviderForCategory(category: ProviderCategory): string | undefined {
+  try {
+    return useProviderStore.getState().getProvider(category) ?? undefined
+  } catch {
+    return undefined
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Topological sort – returns node IDs in execution order grouped by level.
@@ -268,7 +278,7 @@ export async function executeNode(
         const res = await fetch('/api/chat', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ messages, temperature, maxTokens }),
+          body: JSON.stringify({ messages, temperature, maxTokens, provider: getProviderForCategory('text') }),
         })
 
         if (!res.ok) {
@@ -301,6 +311,7 @@ export async function executeNode(
             negativePrompt,
             size,
             style,
+            provider: getProviderForCategory('image-gen'),
           }),
         })
 
@@ -326,7 +337,7 @@ export async function executeNode(
         const res = await fetch('/api/analyze-image', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ image: imageValue, mode }),
+          body: JSON.stringify({ image: imageValue, mode, provider: getProviderForCategory('vision') }),
         })
 
         if (!res.ok) {
@@ -356,7 +367,7 @@ export async function executeNode(
         const res = await fetch('/api/image-to-3d', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ imageBase64: imageValue }),
+          body: JSON.stringify({ imageBase64: imageValue, provider: getProviderForCategory('3d') }),
         })
 
         if (!res.ok) {
@@ -388,7 +399,7 @@ export async function executeNode(
         const res = await fetch('/api/brand-kit', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ prompt: promptText, industry }),
+          body: JSON.stringify({ prompt: promptText, industry, provider: getProviderForCategory('text') }),
         })
 
         if (!res.ok) {
@@ -415,7 +426,7 @@ export async function executeNode(
         const res = await fetch('/api/remove-bg', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ imageBase64: imageValue }),
+          body: JSON.stringify({ imageBase64: imageValue, provider: getProviderForCategory('remove-bg') }),
         })
 
         if (!res.ok) {
@@ -456,7 +467,7 @@ export async function executeNode(
         const res = await fetch('/api/style-transfer', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ imageBase64: imageValue, stylePrompt }),
+          body: JSON.stringify({ imageBase64: imageValue, stylePrompt, provider: getProviderForCategory('style-transfer') }),
         })
 
         if (!res.ok) {
@@ -490,7 +501,7 @@ export async function executeNode(
         const res = await fetch('/api/vectorize', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ imageBase64: imageValue }),
+          body: JSON.stringify({ imageBase64: imageValue, provider: getProviderForCategory('vectorize') }),
         })
 
         if (!res.ok) {

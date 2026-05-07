@@ -11,6 +11,7 @@ import { Sparkles, Send, Loader2, Image, Palette, PenTool, LayoutTemplate } from
 import { cn } from '@/lib/utils'
 import ReactMarkdown from 'react-markdown'
 import { toast } from 'sonner'
+import { ProviderSelector } from '@/components/ui/provider-selector'
 
 interface ChatSidebarProps {
   onClose: () => void
@@ -257,6 +258,11 @@ ${Object.entries(kit.colors || {}).map(([key, val]) => `• ${key}: \`${val}\``)
             ✕
           </Button>
         </div>
+      </div>
+
+      {/* Provider selector */}
+      <div className="px-3 py-2 border-b border-white/5">
+        <ProviderSelector category="image-gen" compact />
       </div>
 
       {/* Messages */}

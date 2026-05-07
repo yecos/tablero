@@ -1,14 +1,14 @@
-// NOTE: Currently this endpoint uses text-to-image generation as a fallback.
-// True upscale would require dedicated providers that support
-// image-to-image transformation. The input image is accepted but only used
-// as context for prompt enhancement.
+// NOTE: This endpoint supports both text-to-image based "upscale" and real
+// AI upscaling via dedicated providers. When useRealUpscale is true, it uses
+// the new upscaleImage() convenience function. Otherwise, falls back to
+// text-to-image generation as a fallback.
 
 import { NextRequest, NextResponse } from 'next/server'
-import { generateImage } from '@/lib/ai-providers'
+import { generateImage, upscaleImage } from '@/lib/ai-providers'
 
 export async function POST(request: NextRequest) {
   try {
-    const { imageBase64, imageUrl, scale = 2, enhancement = 'moderate' } = await request.json()
+    const { imageBase64, imageUrl, scale = 2, enhancement = 'moderate', provider, useRealUpscale } = await request.json()
 
     if (!imageBase64 && !imageUrl) {
       return NextResponse.json(
@@ -17,6 +17,27 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    // Try real AI upscaling if requested and we have an image
+    if (useRealUpscale && imageBase64) {
+      try {
+        const imgSource = imageBase64.startsWith('data:') ? imageBase64 : `data:image/png;base64,${imageBase64}`
+        const result = await upscaleImage(imgSource, { scale }, provider as string | undefined)
+
+        return NextResponse.json({
+          imageUrl: result.image,
+          base64: result.isBase64 ? result.image.replace(/^data:image\/\w+;base64,/, '') : null,
+          scale: result.scale ?? scale,
+          enhancement,
+          provider: result.provider,
+          realUpscale: true,
+        })
+      } catch (error) {
+        console.warn('[upscale] Real upscale failed, falling back to text-to-image:', error)
+        // Fall through to text-to-image fallback below
+      }
+    }
+
+    // Fallback: text-to-image based upscale
     const enhancementLevel = enhancement === 'subtle' ? 'subtly enhanced' : enhancement === 'intense' ? 'sharply enhanced with maximum detail' : 'enhanced with more detail'
 
     const sizeMap: Record<number, string> = {
@@ -29,7 +50,7 @@ export async function POST(request: NextRequest) {
 
     const prompt = `Ultra high resolution version of the original image, ${enhancementLevel}, professional quality, crisp details, 4K`
 
-    const result = await generateImage(prompt, { size: targetSize })
+    const result = await generateImage(prompt, { size: targetSize }, provider as string | undefined)
 
     return NextResponse.json({
       imageUrl: result.url,

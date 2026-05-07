@@ -6,6 +6,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Slider } from '@/components/ui/slider'
 import { Label } from '@/components/ui/label'
 import { ScrollArea } from '@/components/ui/scroll-area'
+import { ProviderSelector } from '@/components/ui/provider-selector'
 
 interface TextAINodeProps {
   node: WorkflowNode
@@ -82,6 +83,8 @@ export function TextAINode({ node, onDataChange }: TextAINodeProps) {
           <span className="text-[10px] text-emerald-400">Completed</span>
         </div>
       )}
+
+      <ProviderSelector category="text" compact />
     </div>
   )
 }

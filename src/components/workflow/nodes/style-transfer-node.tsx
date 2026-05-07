@@ -3,6 +3,7 @@
 import React from 'react'
 import { Paintbrush } from 'lucide-react'
 import type { WorkflowNode } from '@/store/workflow-types'
+import { ProviderSelector } from '@/components/ui/provider-selector'
 
 interface StyleTransferNodeProps {
   node: WorkflowNode
@@ -36,6 +37,7 @@ export function StyleTransferNode({ node, onDataChange }: StyleTransferNodeProps
           <div className="text-[9px] text-white/50">Styled image ready</div>
         </div>
       ) : null}
+      <ProviderSelector category="style-transfer" compact />
     </div>
   )
 }

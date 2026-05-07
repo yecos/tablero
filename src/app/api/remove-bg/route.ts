@@ -3,7 +3,7 @@ import { removeBackground } from '@/lib/ai-providers'
 
 export async function POST(request: NextRequest) {
   try {
-    const { imageBase64, imageUrl } = await request.json()
+    const { imageBase64, imageUrl, provider } = await request.json()
 
     let imgSource: string | null = null
 
@@ -26,7 +26,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Image data is required (imageBase64 or imageUrl)' }, { status: 400 })
     }
 
-    const result = await removeBackground(imgSource)
+    const result = await removeBackground(imgSource, provider as string | undefined)
 
     return NextResponse.json({
       success: true,

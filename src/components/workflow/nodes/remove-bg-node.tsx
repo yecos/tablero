@@ -3,6 +3,7 @@
 import React from 'react'
 import { Scissors } from 'lucide-react'
 import type { WorkflowNode } from '@/store/workflow-types'
+import { ProviderSelector } from '@/components/ui/provider-selector'
 
 interface RemoveBgNodeProps {
   node: WorkflowNode
@@ -24,6 +25,7 @@ export function RemoveBgNode({ node }: RemoveBgNodeProps) {
           <div className="text-[9px] text-white/50">Result ready</div>
         </div>
       ) : null}
+      <ProviderSelector category="remove-bg" compact />
     </div>
   )
 }

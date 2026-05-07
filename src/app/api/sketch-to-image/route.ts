@@ -1,14 +1,13 @@
-// NOTE: Currently this endpoint uses text-to-image generation as a fallback.
-// True sketch-to-image would require dedicated providers that support
-// image-to-image transformation. The input image is accepted but only used
-// as context for prompt enhancement.
+// NOTE: This endpoint now uses the real transformImage() function for
+// sketch-to-image when a sketch is provided. Falls back to text-to-image
+// if transform fails.
 
 import { NextRequest, NextResponse } from 'next/server'
-import { generateImage } from '@/lib/ai-providers'
+import { generateImage, transformImage } from '@/lib/ai-providers'
 
 export async function POST(request: NextRequest) {
   try {
-    const { prompt, sketchBase64, style = 'natural' } = await request.json()
+    const { prompt, sketchBase64, style = 'natural', provider } = await request.json()
 
     if (!prompt || typeof prompt !== 'string') {
       return NextResponse.json(
@@ -28,7 +27,28 @@ export async function POST(request: NextRequest) {
     const styleDesc = styleMap[style] || styleMap.natural
     const enhancedPrompt = `Based on a sketch: ${prompt}. ${styleDesc}. High quality, detailed, professional`
 
-    const result = await generateImage(enhancedPrompt, { size: '1024x1024', style })
+    // Try real image-to-image transformation if we have a sketch
+    if (sketchBase64) {
+      try {
+        const imgSource = sketchBase64.startsWith('data:') ? sketchBase64 : `data:image/png;base64,${sketchBase64}`
+        const result = await transformImage(imgSource, enhancedPrompt, { strength: 0.7 }, provider as string | undefined)
+
+        return NextResponse.json({
+          imageUrl: result.image,
+          base64: result.isBase64 ? result.image.replace(/^data:image\/\w+;base64,/, '') : null,
+          prompt,
+          style,
+          provider: result.provider,
+          realTransform: true,
+        })
+      } catch (error) {
+        console.warn('[sketch-to-image] Transform failed, falling back to text-to-image:', error)
+        // Fall through to text-to-image fallback below
+      }
+    }
+
+    // Fallback: text-to-image based sketch-to-image
+    const result = await generateImage(enhancedPrompt, { size: '1024x1024', style }, provider as string | undefined)
 
     return NextResponse.json({
       imageUrl: result.url,

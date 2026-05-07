@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Palette, Type, Quote } from 'lucide-react'
+import { ProviderSelector } from '@/components/ui/provider-selector'
 
 interface BrandKitNodeProps {
   node: WorkflowNode
@@ -127,6 +128,8 @@ export function BrandKitNode({ node, onDataChange }: BrandKitNodeProps) {
           <span className="text-[10px] text-emerald-400">Brand kit generated</span>
         </div>
       )}
+
+      <ProviderSelector category="text" compact />
     </div>
   )
 }
