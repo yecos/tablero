@@ -5,6 +5,7 @@ export const metadata = {
   description: 'Detalle del espacio creativo',
 };
 
-export default function SpaceDetailPage({ params }: { params: { id: string } }) {
-  return <SpaceDetail spaceId={params.id} />;
+export default async function SpaceDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  return <SpaceDetail spaceId={id} />;
 }
