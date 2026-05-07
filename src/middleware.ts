@@ -5,6 +5,12 @@ import { getToken } from 'next-auth/jwt';
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
+  // If NEXTAUTH_SECRET is not configured, allow all requests through
+  // This enables the app to work in development/demo mode without auth setup
+  if (!process.env.NEXTAUTH_SECRET) {
+    return NextResponse.next();
+  }
+
   // Public routes that don't require authentication
   const publicRoutes = ['/', '/login', '/tools'];
   const isPublicRoute = publicRoutes.some(route => pathname === route || pathname.startsWith('/tools/'));
