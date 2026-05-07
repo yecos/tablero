@@ -1,14 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import ZAI from 'z-ai-web-dev-sdk'
-
-let zaiInstance: Awaited<ReturnType<typeof ZAI.create>> | null = null
-
-async function getZAI() {
-  if (!zaiInstance) {
-    zaiInstance = await ZAI.create()
-  }
-  return zaiInstance
-}
+import { generateText } from '@/lib/ai-providers'
 
 export async function POST(request: NextRequest) {
   try {
@@ -29,8 +20,6 @@ export async function POST(request: NextRequest) {
     } else {
       return NextResponse.json({ error: 'Brand description or prompt is required' }, { status: 400 })
     }
-
-    const zai = await getZAI()
 
     const contextStr = industry ? ` in the ${industry} industry` : ''
     const prompt = `Generate a complete brand kit for the following brand${contextStr}: "${description}"
@@ -63,20 +52,18 @@ Return a JSON object with exactly this structure (no markdown, no extra text, ju
 
 Make sure all hex colors are valid and visually cohesive. The fonts should be real, well-known font families. Be creative and specific.`
 
-    const response = await zai.chat.completions.create({
-      messages: [
+    // Use the provider system with automatic fallback
+    const result = await generateText(
+      [
         { role: 'system', content: 'You are a professional brand identity designer. You create cohesive, beautiful brand kits. Always respond with valid JSON only, no markdown formatting or code blocks.' },
         { role: 'user', content: prompt },
       ],
-      max_tokens: 1024,
-      temperature: 0.7,
-    })
-
-    const content = response.choices?.[0]?.message?.content || ''
+      { temperature: 0.7, maxTokens: 1024 },
+    )
 
     let brandKit
     try {
-      const cleanedContent = content.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
+      const cleanedContent = result.text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
       brandKit = JSON.parse(cleanedContent)
     } catch {
       brandKit = {
@@ -105,20 +92,18 @@ Make sure all hex colors are valid and visually cohesive. The fonts should be re
       }
     }
 
-    // Return in format that works for both direct use and workflow engine
-    // Workflow engine expects the data directly accessible
     return NextResponse.json({
       brandKit,
-      // Also expose color arrays for easy workflow consumption
       colors: brandKit.colors ? Object.values(brandKit.colors) : [],
       fonts: brandKit.fonts ? [brandKit.fonts.heading, brandKit.fonts.body] : [],
       tagline: brandKit.tagline || '',
+      provider: result.provider,
     })
   } catch (error) {
     console.error('Brand kit API error:', error)
     return NextResponse.json(
       { error: 'Failed to generate brand kit. Please try again.' },
-      { status: 500 }
+      { status: 500 },
     )
   }
 }

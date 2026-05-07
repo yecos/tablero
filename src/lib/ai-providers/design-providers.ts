@@ -1,9 +1,9 @@
 // ---------------------------------------------------------------------------
-// Design Utility Providers — remove-bg, style-transfer, vectorize
+// Design Utility Providers — remove-bg, style-transfer, vectorize, vision
 // ---------------------------------------------------------------------------
 // These are specialized providers for design-specific tasks.
 
-import type { RemoveBgProvider, StyleTransferProvider, VectorizeProvider, RemoveBgResult, StyleTransferResult, VectorizeResult } from './types'
+import type { RemoveBgProvider, StyleTransferProvider, VectorizeProvider, VisionProvider, RemoveBgResult, StyleTransferResult, VectorizeResult, VisionResult } from './types'
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // REMOVE BACKGROUND
@@ -282,4 +282,95 @@ export const hfVectorizerProvider: VectorizeProvider = {
 export const vectorizeProviders: VectorizeProvider[] = [
   vectorizerProvider,
   hfVectorizerProvider,
+]
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// VISION / IMAGE ANALYSIS
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// ── ZAI VLM (built-in, always available) ──────────────────────────────────────
+
+let zaiInstance: Awaited<ReturnType<typeof import('z-ai-web-dev-sdk').default.create>> | null = null
+
+async function getZAI() {
+  if (!zaiInstance) {
+    const ZAI = (await import('z-ai-web-dev-sdk')).default
+    zaiInstance = await ZAI.create()
+  }
+  return zaiInstance
+}
+
+export const zaiVisionProvider: VisionProvider = {
+  name: 'zai-vlm',
+  isAvailable: () => true,
+  async analyze(imageUrl, prompt) {
+    const zai = await getZAI()
+    const response = await zai.chat.completions.createVision({
+      model: 'glm-4v-flash',
+      messages: [{
+        role: 'user',
+        content: [
+          { type: 'text', text: prompt },
+          { type: 'image_url', image_url: { url: imageUrl } },
+        ],
+      }],
+      thinking: { type: 'disabled' },
+    })
+
+    const text = response.choices?.[0]?.message?.content
+    if (!text) throw new Error('Empty response from ZAI VLM')
+    return { text, provider: 'zai-vlm', model: 'glm-4v-flash' }
+  },
+}
+
+// ── Google Gemini Vision ──────────────────────────────────────────────────────
+
+export const geminiVisionProvider: VisionProvider = {
+  name: 'gemini-vision',
+  isAvailable: () => !!process.env.GOOGLE_API_KEY,
+  async analyze(imageUrl, prompt, options) {
+    const apiKey = process.env.GOOGLE_API_KEY!
+
+    // Gemini requires inline data for images, not URLs
+    // For data URLs, extract the base64 data; for HTTP URLs, skip this provider
+    let imagePart: { inlineData: { mimeType: string; data: string } } | undefined
+    if (imageUrl.startsWith('data:')) {
+      const mimeType = imageUrl.match(/data:([^;]+);/)?.[1] || 'image/jpeg'
+      const data = imageUrl.replace(/^data:[^;]+;base64,/, '')
+      imagePart = { inlineData: { mimeType, data } }
+    } else {
+      // Gemini free tier doesn't support URL-based images easily
+      throw new Error('Gemini Vision requires base64 data URLs, not HTTP URLs')
+    }
+
+    const res = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{
+            role: 'user',
+            parts: [{ text: prompt }, imagePart],
+          }],
+          generationConfig: { maxOutputTokens: options?.maxTokens ?? 1024 },
+        }),
+      },
+    )
+
+    if (!res.ok) {
+      const err = await res.text()
+      throw new Error(`Gemini Vision error ${res.status}: ${err}`)
+    }
+
+    const data = await res.json()
+    const text = data.candidates?.[0]?.content?.parts?.[0]?.text
+    if (!text) throw new Error('Empty response from Gemini Vision')
+    return { text, provider: 'gemini-vision', model: 'gemini-2.0-flash' }
+  },
+}
+
+export const visionProviders: VisionProvider[] = [
+  zaiVisionProvider,
+  geminiVisionProvider,
 ]

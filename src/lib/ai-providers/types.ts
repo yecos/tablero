@@ -51,6 +51,13 @@ export interface VectorizeResult {
   provider: string
 }
 
+/** Result of a vision/analysis call */
+export interface VisionResult {
+  text: string
+  provider: string
+  model?: string
+}
+
 // ---------------------------------------------------------------------------
 // Provider interfaces — one per capability
 // ---------------------------------------------------------------------------
@@ -93,6 +100,13 @@ export interface VectorizeProvider {
   name: string
   isAvailable: () => boolean
   vectorize: (imageBase64: string) => Promise<VectorizeResult>
+}
+
+export interface VisionProvider {
+  name: string
+  isAvailable: () => boolean
+  /** Analyze an image with a text prompt and return the AI response */
+  analyze: (imageUrl: string, prompt: string, options?: { maxTokens?: number }) => Promise<VisionResult>
 }
 
 // ---------------------------------------------------------------------------

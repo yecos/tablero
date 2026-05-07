@@ -13,15 +13,15 @@ export * from './types'
 export { textProviders, zaiTextProvider, geminiProvider, groqProvider, openrouterProvider, cerebrasProvider } from './text-providers'
 export { imageProviders, zaiImageProvider, pollinationsProvider, togetherImageProvider, huggingfaceImageProvider, falImageProvider } from './image-providers'
 export { threeDProviders, hunyuan3dProvider, tripo3dProvider, sf3dProvider, fal3dProvider, fallback3dProvider, createFallbackGLB } from './threed-providers'
-export { removeBgProviders, styleTransferProviders, vectorizeProviders, hfRembgProvider, removebgProvider, clipdropRembgProvider, hfStyleTransferProvider, pollinationsStyleProvider, falStyleTransferProvider, vectorizerProvider, hfVectorizerProvider } from './design-providers'
+export { removeBgProviders, styleTransferProviders, vectorizeProviders, visionProviders, hfRembgProvider, removebgProvider, clipdropRembgProvider, hfStyleTransferProvider, pollinationsStyleProvider, falStyleTransferProvider, vectorizerProvider, hfVectorizerProvider, zaiVisionProvider, geminiVisionProvider } from './design-providers'
 
 // ── Convenience functions with automatic fallback ────────────────────────────
 
-import { tryProviders, type TextGenResult, type ImageGenResult, type ThreeDGenResult, type RemoveBgResult, type StyleTransferResult, type VectorizeResult } from './types'
+import { tryProviders, type TextGenResult, type ImageGenResult, type ThreeDGenResult, type RemoveBgResult, type StyleTransferResult, type VectorizeResult, type VisionResult } from './types'
 import { textProviders } from './text-providers'
 import { imageProviders } from './image-providers'
 import { threeDProviders } from './threed-providers'
-import { removeBgProviders, styleTransferProviders, vectorizeProviders } from './design-providers'
+import { removeBgProviders, styleTransferProviders, vectorizeProviders, visionProviders } from './design-providers'
 
 /**
  * Generate text using available providers with automatic fallback.
@@ -92,5 +92,20 @@ export async function vectorizeImage(imageBase64: string): Promise<VectorizeResu
   return tryProviders<VectorizeResult>('vectorize', vectorizeProviders.map((p) => ({
     provider: p,
     fn: () => p.vectorize(imageBase64),
+  })))
+}
+
+/**
+ * Analyze an image using vision providers with automatic fallback.
+ * Tries: ZAI VLM → Gemini Vision
+ */
+export async function analyzeImage(
+  imageUrl: string,
+  prompt: string,
+  options?: { maxTokens?: number },
+): Promise<VisionResult> {
+  return tryProviders<VisionResult>('vision', visionProviders.map((p) => ({
+    provider: p,
+    fn: () => p.analyze(imageUrl, prompt, options),
   })))
 }

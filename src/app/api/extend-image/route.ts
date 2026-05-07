@@ -1,14 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import ZAI from 'z-ai-web-dev-sdk'
-
-let zaiInstance: Awaited<ReturnType<typeof ZAI.create>> | null = null
-
-async function getZAI() {
-  if (!zaiInstance) {
-    zaiInstance = await ZAI.create()
-  }
-  return zaiInstance
-}
+import { generateImage } from '@/lib/ai-providers'
 
 export async function POST(request: NextRequest) {
   try {
@@ -16,12 +7,10 @@ export async function POST(request: NextRequest) {
 
     if (!imageBase64 && !imageUrl) {
       return NextResponse.json(
-        { error: 'Se requiere una imagen (imageBase64 o imageUrl)' },
-        { status: 400 }
+        { error: 'Image data is required (imageBase64 or imageUrl)' },
+        { status: 400 },
       )
     }
-
-    const zai = await getZAI()
 
     const directionMap: Record<string, string> = {
       up: 'extended upward with more sky and ceiling space',
@@ -33,7 +22,7 @@ export async function POST(request: NextRequest) {
 
     const directionDesc = directionMap[direction] || directionMap.all
 
-    const sizeMap: Record<string, '1344x768' | '768x1344' | '1152x864' | '864x1152' | '1024x1024'> = {
+    const sizeMap: Record<string, string> = {
       '16:9': '1344x768',
       '9:16': '768x1344',
       '4:3': '1152x864',
@@ -44,31 +33,20 @@ export async function POST(request: NextRequest) {
 
     const prompt = `Seamlessly ${directionDesc}, maintaining the original style and composition, professional quality, expanded canvas`
 
-    const response = await zai.images.generations.create({
-      prompt,
-      size: targetSize,
-    })
-
-    if (!response.data || response.data.length === 0) {
-      return NextResponse.json(
-        { error: 'No se pudo extender la imagen. Inténtalo de nuevo.' },
-        { status: 500 }
-      )
-    }
-
-    const imageData = response.data[0] as { base64?: string; url?: string; b64_json?: string }
+    const result = await generateImage(prompt, { size: targetSize })
 
     return NextResponse.json({
-      imageUrl: imageData.url || null,
-      base64: imageData.b64_json || imageData.base64 || null,
+      imageUrl: result.url,
+      base64: result.isBase64 ? result.url.replace(/^data:image\/\w+;base64,/, '') : null,
       direction,
       aspectRatio,
+      provider: result.provider,
     })
   } catch (error) {
-    console.error('Error en la API de extender imagen:', error)
+    console.error('Extend image API error:', error)
     return NextResponse.json(
-      { error: 'Error al extender la imagen. Por favor, inténtalo de nuevo.' },
-      { status: 500 }
+      { error: 'Failed to extend image. Please try again.' },
+      { status: 500 },
     )
   }
 }

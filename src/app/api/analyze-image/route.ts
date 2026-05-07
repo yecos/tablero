@@ -1,13 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
-import ZAI from 'z-ai-web-dev-sdk'
+import { analyzeImage } from '@/lib/ai-providers'
 
 export const maxDuration = 60
 export const dynamic = 'force-dynamic'
-
-// Create a fresh ZAI instance per request to ensure clean state
-async function getZAI() {
-  return await ZAI.create()
-}
 
 const ANALYZE_PROMPT = `You are an expert design analysis AI. Analyze this image carefully and identify ALL distinct visual elements that could be separated into editable layers.
 
@@ -56,24 +51,24 @@ function createFallbackAnalysis() {
         description: 'The complete background scene of the image',
         position: 'full',
         generatePrompt: 'Generate a background scene matching the original image style and context, complete composition',
-        removePrompt: 'Empty background scene with the same style'
+        removePrompt: 'Empty background scene with the same style',
       },
       {
         id: 'sub_1', name: 'Main Subject', type: 'subject',
         description: 'The main subject or foreground element in the image',
         position: 'center',
         generatePrompt: 'Generate the main subject from the image on a clean transparent background, isolated and detailed',
-        removePrompt: 'The background scene without the main subject'
+        removePrompt: 'The background scene without the main subject',
       },
       {
         id: 'obj_1', name: 'Foreground Objects', type: 'object',
         description: 'Secondary objects and decorative elements in the scene',
         position: 'center',
         generatePrompt: 'Generate the secondary objects and decorative elements from the image on transparent background',
-        removePrompt: 'The scene without secondary objects'
-      }
+        removePrompt: 'The scene without secondary objects',
+      },
     ],
-    textElements: []
+    textElements: [],
   }
 }
 
@@ -82,16 +77,13 @@ export async function POST(request: NextRequest) {
 
   try {
     let imgSource: string | null = null
-    let mode: string = 'analyze'
     const contentType = request.headers.get('content-type') || ''
 
     if (contentType.includes('multipart/form-data')) {
-      // Handle multipart form upload
       console.log('[analyze-image] Processing multipart form upload')
       const formData = await request.formData()
       const imageFile = formData.get('image') as File | null
       const imageUrl = formData.get('imageUrl') as string | null
-      mode = (formData.get('mode') as string) || 'analyze'
 
       if (imageFile) {
         const sizeMB = imageFile.size / (1024 * 1024)
@@ -100,11 +92,10 @@ export async function POST(request: NextRequest) {
         if (sizeMB > 2) {
           return NextResponse.json(
             { error: `Image is too large (${sizeMB.toFixed(1)}MB). Please upload a smaller image (under 2MB).` },
-            { status: 413 }
+            { status: 413 },
           )
         }
 
-        // Convert uploaded file to base64 data URL for VLM
         const arrayBuffer = await imageFile.arrayBuffer()
         const buffer = Buffer.from(arrayBuffer)
         const mimeType = imageFile.type || 'image/jpeg'
@@ -113,10 +104,6 @@ export async function POST(request: NextRequest) {
         imgSource = imageUrl
       }
     } else {
-      // Handle JSON body - supports multiple formats:
-      // Format 1 (Direct): { imageBase64, imageUrl }
-      // Format 2 (Workflow engine): { image, mode }
-      // Format 3 (Legacy): { imageBase64, imageUrl, mode }
       let body
       try {
         body = await request.json()
@@ -124,14 +111,11 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'Invalid request body' }, { status: 400 })
       }
 
-      mode = body.mode || 'analyze'
-
       const imageBase64 = body.imageBase64
       const imageUrl = body.imageUrl
-      const imageStr = body.image  // Workflow engine sends the image as 'image' field
+      const imageStr = body.image
 
       if (imageStr) {
-        // Workflow engine format: image is a URL or base64 string
         if (imageStr.startsWith('http')) {
           imgSource = imageStr
         } else if (imageStr.startsWith('data:')) {
@@ -146,11 +130,10 @@ export async function POST(request: NextRequest) {
         if (sizeMB > 2) {
           return NextResponse.json(
             { error: `Image is too large (${sizeMB.toFixed(1)}MB). Please upload a smaller image.` },
-            { status: 413 }
+            { status: 413 },
           )
         }
 
-        // Ensure proper data URL format
         if (imageBase64.startsWith('data:')) {
           imgSource = imageBase64
         } else {
@@ -165,44 +148,21 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Image data is required' }, { status: 400 })
     }
 
-    // Call VLM directly (Vercel serverless is isolated per request, no memory accumulation)
-    console.log('[analyze-image] Calling VLM API directly')
-
-    let zai
-    try {
-      zai = await getZAI()
-    } catch (sdkError) {
-      console.error('[analyze-image] SDK initialization failed:', sdkError)
-      return NextResponse.json({
-        success: true,
-        analysis: createFallbackAnalysis(),
-        rawAnalysis: 'AI SDK initialization failed',
-        fallback: true
-      })
-    }
-
+    // Use the provider system with automatic fallback
     let content: string
+    let usedProvider: string
     try {
-      const response = await zai.chat.completions.createVision({
-        model: 'glm-4v-flash',
-        messages: [{
-          role: 'user',
-          content: [
-            { type: 'text', text: ANALYZE_PROMPT },
-            { type: 'image_url', image_url: { url: imgSource } }
-          ]
-        }],
-        thinking: { type: 'disabled' }
-      })
-
-      content = response.choices?.[0]?.message?.content || ''
-    } catch (vlmError) {
-      console.error('[analyze-image] VLM call failed:', vlmError)
+      const result = await analyzeImage(imgSource, ANALYZE_PROMPT)
+      content = result.text
+      usedProvider = result.provider
+      console.log(`[analyze-image] Vision analysis complete via ${usedProvider}`)
+    } catch (providerError) {
+      console.warn('[analyze-image] All vision providers failed:', providerError)
       return NextResponse.json({
         success: true,
         analysis: createFallbackAnalysis(),
-        rawAnalysis: 'Vision model call failed',
-        fallback: true
+        rawAnalysis: 'Vision analysis providers unavailable',
+        fallback: true,
       })
     }
 
@@ -217,13 +177,12 @@ export async function POST(request: NextRequest) {
       } else {
         throw new Error('No JSON found in VLM response')
       }
-    } catch (parseErr) {
+    } catch {
       console.warn('[analyze-image] Failed to parse VLM response, using fallback')
       analysis = createFallbackAnalysis()
       isFallback = true
     }
 
-    // Validate the analysis
     if (!analysis?.elements || !Array.isArray(analysis.elements) || analysis.elements.length === 0) {
       analysis = createFallbackAnalysis()
       isFallback = true
@@ -231,8 +190,6 @@ export async function POST(request: NextRequest) {
 
     console.log('[analyze-image] Analysis complete, found', analysis.elements?.length || 0, 'elements and', analysis.textElements?.length || 0, 'text elements')
 
-    // Return in format that works for both direct use and workflow engine
-    // Workflow engine looks for: data.layers or just data
     return NextResponse.json({
       success: true,
       analysis,
@@ -242,13 +199,14 @@ export async function POST(request: NextRequest) {
         type: el.type,
       })) || [],
       rawAnalysis: isFallback ? content : '',
-      fallback: isFallback
+      fallback: isFallback,
+      provider: usedProvider,
     })
   } catch (error) {
     console.error('[analyze-image] Unhandled error:', error)
     return NextResponse.json(
       { error: 'Failed to analyze image. Please try again.' },
-      { status: 500 }
+      { status: 500 },
     )
   }
 }
