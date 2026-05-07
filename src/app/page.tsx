@@ -1,38 +1,27 @@
-'use client'
+"use client";
 
-import { useState } from 'react'
-import { Navbar } from '@/components/navbar'
-import { HeroSection } from '@/components/hero-section'
-import { FeaturesSection } from '@/components/features-section'
-import { HowItWorks } from '@/components/how-it-works'
-import { CanvasPreview } from '@/components/canvas-preview'
-import { PricingSection } from '@/components/pricing-section'
-import { GallerySection } from '@/components/gallery-section'
-import { CtaSection } from '@/components/cta-section'
-import { Footer } from '@/components/footer'
-import { DesignWorkspace } from '@/components/design-workspace'
+import { Navbar } from "@/components/landing/navbar";
+import { HeroSection } from "@/components/landing/hero-section";
+import { ToolsSection } from "@/components/landing/tools-section";
+import { SpacesSection } from "@/components/landing/spaces-section";
+import { ModelsSection } from "@/components/landing/models-section";
+import { ShowcaseSection } from "@/components/landing/showcase-section";
+import { PricingSection } from "@/components/landing/pricing-section";
+import { Footer } from "@/components/landing/footer";
 
 export default function Home() {
-  const [workspaceOpen, setWorkspaceOpen] = useState(false)
-
   return (
-    <div className="min-h-screen flex flex-col bg-[#0a0a0f]">
-      <Navbar onStartCreating={() => setWorkspaceOpen(true)} />
-      <main className="flex-1">
-        <HeroSection onStartCreating={() => setWorkspaceOpen(true)} />
-        <FeaturesSection />
-        <HowItWorks />
-        <CanvasPreview />
-        <PricingSection onStartCreating={() => setWorkspaceOpen(true)} />
-        <GallerySection />
-        <CtaSection onStartCreating={() => setWorkspaceOpen(true)} />
+    <div className="min-h-screen bg-[#0a0a0f]">
+      <Navbar />
+      <main>
+        <HeroSection />
+        <ToolsSection />
+        <SpacesSection />
+        <ModelsSection />
+        <ShowcaseSection />
+        <PricingSection />
       </main>
       <Footer />
-
-      {/* Design Workspace Overlay */}
-      {workspaceOpen && (
-        <DesignWorkspace onClose={() => setWorkspaceOpen(false)} />
-      )}
     </div>
-  )
+  );
 }

@@ -12,7 +12,7 @@ import {
   Layers,
   Type,
   Square,
-  Image,
+  Image as ImageIcon,
   Sparkles,
   CheckCircle2,
   AlertCircle,
@@ -289,7 +289,7 @@ export function ImageSplitPanel() {
   // Get icon for element type
   const getElementIcon = (type: string) => {
     switch (type) {
-      case 'background': return Image
+      case 'background': return ImageIcon
       case 'subject': return ScanEye
       case 'text': return Type
       case 'object': return Square
@@ -673,7 +673,7 @@ async function resizeBase64Image(dataUrl: string, maxDim: number): Promise<strin
       }
     }, timeoutMs)
 
-    const img = new Image()
+    const img = new window.Image()
     img.onload = () => {
       if (resolved) return
       resolved = true

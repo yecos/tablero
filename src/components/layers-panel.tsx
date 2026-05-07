@@ -10,7 +10,7 @@ import {
   Lock,
   Unlock,
   Trash2,
-  Image,
+  Image as ImageIcon,
   Type,
   Square,
   Layers,
@@ -44,7 +44,7 @@ export function LayersPanel() {
 
   const getElementIcon = (type: string) => {
     switch (type) {
-      case 'image': return Image
+      case 'image': return ImageIcon
       case 'text': return Type
       case 'shape': return Square
       case 'group': return Layers
@@ -237,7 +237,7 @@ export function LayersPanel() {
                     reader.onload = (event) => {
                       const src = event.target?.result as string
                       if (!src) return
-                      const img = new Image()
+                      const img = new window.Image()
                       img.onload = () => {
                         const maxDim = 500
                         const ratio = Math.min(maxDim / img.width, maxDim / img.height, 1)

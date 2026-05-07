@@ -36,7 +36,7 @@ export function CanvasArea() {
     zoom,
     addElement,
     updateElement,
-    setActiveTool: useDesignStore.getState().setActiveTool,
+    setActiveTool: useDesignStore.getState().setActiveTool as (tool: string) => void,
   })
 
   // 3D conversion hook

@@ -32,7 +32,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'No image was generated. Please try a different prompt.' }, { status: 500 })
     }
 
-    const imageData = response.data[0]
+    const imageData = response.data[0] as { base64?: string; url?: string; b64_json?: string }
 
     return NextResponse.json({
       imageUrl: imageData.url || null,

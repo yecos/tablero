@@ -2,7 +2,6 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "@/components/ui/toaster";
-import { ErrorBoundary } from "@/components/error-boundary";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -15,22 +14,22 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "DesignAI - The AI Design Agent That Creates For You",
-  description: "From logo to full marketing campaign in one conversation. Describe your vision, get professional designs instantly.",
-  keywords: ["AI", "design", "logo", "brand kit", "image generation", "canvas", "creative"],
-  authors: [{ name: "DesignAI Team" }],
+  title: "Tablero — Plataforma Creativa de IA",
+  description: "La plataforma creativa de IA para dirigir tu mejor trabajo. Cada modelo de IA para vídeo, imagen y audio. Flujos de trabajo inteligentes para control profesional y colaboración.",
+  keywords: ["IA", "inteligencia artificial", "generador de imágenes", "generador de vídeo", " Spaces", "Tablero", "creative AI"],
+  authors: [{ name: "Tablero" }],
   icons: {
     icon: "https://z-cdn.chatglm.cn/z-ai/static/logo.svg",
   },
   openGraph: {
-    title: "DesignAI - The AI Design Agent That Creates For You",
-    description: "From logo to full marketing campaign in one conversation.",
+    title: "Tablero — Plataforma Creativa de IA",
+    description: "La plataforma creativa de IA para dirigir tu mejor trabajo.",
     type: "website",
   },
   twitter: {
     card: "summary_large_image",
-    title: "DesignAI - The AI Design Agent That Creates For You",
-    description: "From logo to full marketing campaign in one conversation.",
+    title: "Tablero — Plataforma Creativa de IA",
+    description: "La plataforma creativa de IA para dirigir tu mejor trabajo.",
   },
 };
 
@@ -40,13 +39,11 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className="dark" suppressHydrationWarning>
+    <html lang="es" className="dark" suppressHydrationWarning>
       <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased bg-background text-foreground`}
+        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
-        <ErrorBoundary>
-          {children}
-        </ErrorBoundary>
+        {children}
         <Toaster />
       </body>
     </html>

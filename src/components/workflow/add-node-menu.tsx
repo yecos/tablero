@@ -123,10 +123,7 @@ export function AddNodeMenu({ x, y, onAddNode, onClose }: AddNodeMenuProps) {
                   className="flex h-7 w-7 items-center justify-center rounded-md"
                   style={{ backgroundColor: defaults.color + '22' }}
                 >
-                  <Icon
-                    size={14}
-                    style={{ color: defaults.color }}
-                  />
+                  {React.createElement(Icon, { size: 14, style: { color: defaults.color } })}
                 </span>
                 <span className="text-sm font-medium text-white/90">
                   {label}

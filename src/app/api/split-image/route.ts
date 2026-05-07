@@ -70,7 +70,7 @@ export async function POST(request: NextRequest) {
         })
 
         if (response.data && response.data.length > 0) {
-          const imageData = response.data[0]
+          const imageData = response.data[0] as { base64?: string; url?: string; b64_json?: string }
           generatedLayers.push({
             id: layer.id,
             name: layer.name,

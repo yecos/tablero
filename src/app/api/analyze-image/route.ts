@@ -166,6 +166,7 @@ export async function POST(request: NextRequest) {
     let content: string
     try {
       const response = await zai.chat.completions.createVision({
+        model: 'glm-4v-flash',
         messages: [{
           role: 'user',
           content: [

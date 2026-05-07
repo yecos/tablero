@@ -10,7 +10,7 @@ import {
   MousePointer2,
   Type,
   Square,
-  Image,
+  Image as ImageIcon,
   Pencil,
   Box,
   Download,
@@ -36,7 +36,7 @@ export function Toolbar({ onClose }: ToolbarProps) {
     { id: 'select' as const, icon: MousePointer2, label: 'Select' },
     { id: 'text' as const, icon: Type, label: 'Text' },
     { id: 'shape' as const, icon: Square, label: 'Shape' },
-    { id: 'image' as const, icon: Image, label: 'Image' },
+    { id: 'image' as const, icon: ImageIcon, label: 'Image' },
     { id: '3d' as const, icon: Box, label: '3D Convert' },
     { id: 'draw' as const, icon: Pencil, label: 'Draw' },
   ]
@@ -114,7 +114,7 @@ export function Toolbar({ onClose }: ToolbarProps) {
           ctx.fillText(element.content, ex, ey, ew)
         } else if (element.type === 'image' && element.src) {
           try {
-            const img = new Image()
+            const img = new window.Image()
             img.crossOrigin = 'anonymous'
             // For base64 images, we can draw directly
             await new Promise<void>((resolve, reject) => {
