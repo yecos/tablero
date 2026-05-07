@@ -1,5 +1,5 @@
 export type AIProvider = 'zai' | 'runware' | 'fal' | 'siliconflow';
-export type AIMode = 'chat' | 'image' | 'video' | 'audio' | 'upscale' | 'image-to-3d' | 'brand-kit';
+export type AIMode = 'chat' | 'image' | 'video' | 'audio' | 'upscale' | 'image-to-3d' | 'brand-kit' | 'vision';
 
 export interface AIProviderConfig {
   name: AIProvider;
@@ -23,6 +23,7 @@ export interface AIRequest {
   seed?: number;
   batchSize?: number;
   image?: string;
+  images?: string[];
   userId?: string;
   spaceId?: string;
   metadata?: Record<string, unknown>;
@@ -34,6 +35,16 @@ export interface AIResponse {
     url?: string; urls?: string[]; text?: string;
     duration?: number; model?: string;
     provider: AIProvider; metadata?: Record<string, unknown>;
+    audioMetadata?: {
+      title: string;
+      description: string;
+      genre: string;
+      mood: string;
+      tempo?: string;
+      duration?: string | number;
+      instruments?: string[];
+      suggestedPrompt: string;
+    };
   };
   error?: string;
   cached?: boolean;

@@ -1,6 +1,8 @@
 import { AIRequest, AIResponse, AIProvider, AIMode, AIProviderConfig, AIStatus, ProviderHealth } from './types';
 import { routeRequest } from './router';
-import { getCache, setCache } from './cache';
+import { getCache, setCache, getCacheSize } from './cache';
+
+const MAX_CACHE_SIZE = 500;
 
 const PROVIDER_CONFIGS: Record<AIProvider, AIProviderConfig> = {
   zai: { name: 'zai', apiKey: process.env.ZAI_API_KEY || '', priority: 1, enabled: true },
@@ -17,6 +19,7 @@ const MODE_PROVIDER_MAP: Record<AIMode, AIProvider[]> = {
   upscale: ['runware', 'fal'],
   'image-to-3d': ['fal'],
   'brand-kit': ['zai'],
+  vision: ['zai'],
 };
 
 const healthStatus: Record<AIProvider, ProviderHealth> = {
@@ -33,11 +36,14 @@ export async function processRequest(request: AIRequest): Promise<AIResponse> {
   const startTime = Date.now();
   totalRequests++;
 
-  // Check cache
-  const cacheKey = generateCacheKey(request);
-  const cached = getCache(cacheKey);
-  if (cached) {
-    return { ...cached, cached: true, duration: Date.now() - startTime };
+  // Check cache (skip for vision/upscale modes that are typically unique)
+  const cacheable = !['vision', 'upscale'].includes(request.mode);
+  if (cacheable) {
+    const cacheKey = generateCacheKey(request);
+    const cached = getCache(cacheKey);
+    if (cached) {
+      return { ...cached, cached: true, duration: Date.now() - startTime };
+    }
   }
 
   // Get providers for this mode
@@ -58,7 +64,16 @@ export async function processRequest(request: AIRequest): Promise<AIResponse> {
       const response = await routeRequest(providerName, request, config);
       if (response.success) {
         successRequests++;
-        setCache(cacheKey, response);
+
+        // Cache the response
+        if (cacheable) {
+          const cacheKey = generateCacheKey(request);
+          setCache(cacheKey, response);
+        }
+
+        // Log API usage
+        logApiUsage(request, providerName, response.duration || 0, true).catch(() => {});
+
         updateHealth(providerName, true, Date.now() - startTime);
         return { ...response, duration: Date.now() - startTime };
       }
@@ -70,7 +85,29 @@ export async function processRequest(request: AIRequest): Promise<AIResponse> {
     }
   }
 
+  // Log failed request
+  logApiUsage(request, enabledProviders[0], Date.now() - startTime, false).catch(() => {});
+
   return { success: false, error: lastError || 'All providers failed', provider: enabledProviders[0], duration: Date.now() - startTime };
+}
+
+async function logApiUsage(request: AIRequest, provider: AIProvider, duration: number, success: boolean) {
+  try {
+    const { PrismaClient } = await import('@prisma/client');
+    const prisma = new PrismaClient();
+    await prisma.apiUsage.create({
+      data: {
+        userId: request.userId || null,
+        provider,
+        mode: request.mode,
+        duration,
+        success,
+      },
+    });
+    await prisma.$disconnect();
+  } catch {
+    // Silently fail - logging should not break the main flow
+  }
 }
 
 function updateHealth(provider: AIProvider, success: boolean, latency: number) {
@@ -93,7 +130,7 @@ function generateCacheKey(req: AIRequest): string {
 export function getAIStatus(): AIStatus {
   return {
     providers: Object.values(healthStatus),
-    cacheSize: 0,
+    cacheSize: getCacheSize(),
     uptime: process.uptime(),
     totalRequests,
     successRate: totalRequests > 0 ? successRequests / totalRequests : 0,
