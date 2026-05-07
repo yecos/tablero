@@ -1,7 +1,8 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Sparkles, Menu, X } from 'lucide-react'
+import Link from 'next/link'
+import { Sparkles, Menu, X, LayoutGrid } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 
@@ -20,6 +21,7 @@ export function Navbar({ onStartCreating }: NavbarProps) {
   }, [])
 
   const navLinks = [
+    { label: 'Spaces', href: '/spaces', icon: LayoutGrid },
     { label: 'Features', href: '#features' },
     { label: 'Canvas', href: '#canvas' },
     { label: 'Pricing', href: '#pricing' },
@@ -50,13 +52,24 @@ export function Navbar({ onStartCreating }: NavbarProps) {
           {/* Desktop Nav */}
           <div className="hidden md:flex items-center gap-8">
             {navLinks.map((link) => (
-              <a
-                key={link.label}
-                href={link.href}
-                className="text-sm text-slate-400 hover:text-white transition-colors duration-200"
-              >
-                {link.label}
-              </a>
+              link.href.startsWith('/') ? (
+                <Link
+                  key={link.label}
+                  href={link.href}
+                  className="text-sm text-slate-400 hover:text-white transition-colors duration-200 flex items-center gap-1.5"
+                >
+                  {link.icon && <link.icon className="w-4 h-4" />}
+                  {link.label}
+                </Link>
+              ) : (
+                <a
+                  key={link.label}
+                  href={link.href}
+                  className="text-sm text-slate-400 hover:text-white transition-colors duration-200"
+                >
+                  {link.label}
+                </a>
+              )
             ))}
           </div>
 
@@ -81,14 +94,26 @@ export function Navbar({ onStartCreating }: NavbarProps) {
         {mobileMenuOpen && (
           <div className="md:hidden bg-[#12121a]/95 backdrop-blur-xl border border-white/5 rounded-xl mt-2 p-4 space-y-3">
             {navLinks.map((link) => (
-              <a
-                key={link.label}
-                href={link.href}
-                className="block text-sm text-slate-400 hover:text-white transition-colors py-2"
-                onClick={() => setMobileMenuOpen(false)}
-              >
-                {link.label}
-              </a>
+              link.href.startsWith('/') ? (
+                <Link
+                  key={link.label}
+                  href={link.href}
+                  className="flex items-center gap-2 text-sm text-slate-400 hover:text-white transition-colors py-2"
+                  onClick={() => setMobileMenuOpen(false)}
+                >
+                  {link.icon && <link.icon className="w-4 h-4" />}
+                  {link.label}
+                </Link>
+              ) : (
+                <a
+                  key={link.label}
+                  href={link.href}
+                  className="block text-sm text-slate-400 hover:text-white transition-colors py-2"
+                  onClick={() => setMobileMenuOpen(false)}
+                >
+                  {link.label}
+                </a>
+              )
             ))}
             <Button
               onClick={() => {
